@@ -1,28 +1,63 @@
 ---
-title: "Mémoire"
+title: "Noise-contrastive estimation of normalising constants and GANs"
+subtitle: "Notes"
+header-includes:
+  - \usepackage{mathrsfs}
+  - \usepackage{bm}
+  - \usepackage{dsfont}
+  - \usepackage{amsmath}
+  - \usepackage{mdframed}
+  - \usepackage{placeins}
 output: pdf_document
+fig_width: 3
+fig_height: 2
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+
+\subsection{Fonction générique NCE}
+
+Utilité : Retourne l'estimation de la constante et des paramètres.
+
+\begin{table}[!h]
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Argument} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
+x & vecteur & rcauchy(100, 0, 1) &  \\ \hline
+law\_y & fonction & rnorm & fonction qui retourne un échantillon suivant la loi $p_n$ \\ \hline
+n & entier & 100 & taille de l'échantillon de bruit suivant la loi $p_n$ \\ \hline
+params\_y & vecteur & c(0,1) & arguments de la fonction law\_y \\ \hline
+log\_pm & fonction &  & fonction qui retourne le logarithme de la densité $p_m$ \\ \hline
+log\_pn & fonction &  & fonction qui retourne le logarithme de la densité $p_n$ \\ \hline
+nb\_of\_params & entier & 3 & taille de $\theta$, vaut habituellement 2 ou 3 \\ \hline
+method & string & "CG" & méthode d'optimisation, habituellement "CG" ou "BFGSé \\ \hline
+\end{tabular}
+\end{table}
+
+```{r}
+nce = function(x, law_y, n, params_y, log_pm, log_pn, nb_of_params, methode = "CG", initialisation = rep(1, nb_of_params)){
+  
+  y = do.call(law_y,c(list(n),params_y))
+  
+  m = length(x)
+  
+  h = function(u, theta){
+    return( 1 / (1 + n/m * exp(log_pn(u) - log_pm(u, theta))))
+  }
+  
+  J = function(theta){
+    return( sum(log(h(x, theta))) + sum(log(1 - h(y, theta))) )
+  }
+  
+  theta = optim(
+    par = initialisation,
+    gr = methode,
+    control = list(fnscale=-1),
+    fn = J
+  )$par
+  
+  return(c(exp(-theta[1]), theta[-1]))
+}
+
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
