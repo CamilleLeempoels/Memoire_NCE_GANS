@@ -16,6 +16,44 @@ fig_height: 2
 
 \section{Fonctions génériques}
 
+\subsection{Algorithme d'Hasting}
+
+Utilité : simuler selon $p_m(.,\psi)$ pour un paramètre $\psi$ choisi. 
+
+\begin{table}[!h]
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Argument} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
+x & vecteur & rcauchy(100, 0, 1) &  notre échantillon de densité inconnue \\ \hline
+n & entier & 100 & taille de la simulation \\ \hline
+psi & vecteur & c(0,1) & arguments de la fonction h \\ \hline
+h & fonction &  & fonction qui retourne $\overline{p_m}(.,\psi)$\\ \hline
+\end{tabular}
+\end{table}
+
+```{r}
+hasting = function(x, n, psi, h){
+  y = c()
+  y = append(y, sample(sample(x, 1)))
+  for (i in 2:n){
+    y_ = rnorm(1, y[i-1], 1)
+    u = runif(1)
+    if ( u <= 
+         (h(y_,psi) * dnorm(y_, y[i-1], 1))
+         /(h(y[i-1],psi) * dnorm(y[i-1], y_, 1))
+    ){ 
+      y = append(y, y_)} 
+    else { 
+      y = append(y, y[i-1])
+    }
+  }
+  return (y)
+}
+```
+
+
+Note : on peut très certainement écrire sous forme matricielle cette fonction pour une meilleure performance.
+
 \subsection{NCE}
 
 Utilité : Retourne l'estimation de la constante et des paramètres.
@@ -24,7 +62,7 @@ Utilité : Retourne l'estimation de la constante et des paramètres.
 \begin{tabular}{|l|l|l|l|}
 \hline
 \textbf{Argument} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
-x & vecteur & rcauchy(100, 0, 1) &  \\ \hline
+x & vecteur & rcauchy(100, 0, 1) & notre échantillon de densité inconnue \\ \hline
 law\_y & fonction & rnorm & fonction qui retourne un échantillon suivant la loi $p_n$ \\ \hline
 n & entier & 100 & taille de l'échantillon de bruit suivant la loi $p_n$ \\ \hline
 params\_y & vecteur & c(0,1) & arguments de la fonction law\_y \\ \hline
@@ -36,7 +74,7 @@ method & string & "CG" & méthode d'optimisation, habituellement "CG" ou "BFGS" 
 \end{table}
 
 ```{r}
-nce = function(x, law_y, n, params_y, log_pm, log_pn, nb_of_params, methode = "CG", initialisation = rep(1, nb_of_params)){
+nce = function(x, law_y, n, params_y, log_pm, log_pn, nb_of_params, methode = "CG"){
   
   y = do.call(law_y,c(list(n),params_y))
   
