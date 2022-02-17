@@ -14,7 +14,9 @@ fig_height: 2
 ---
 
 
-\subsection{Fonction générique NCE}
+\section{Fonctions génériques}
+
+\subsection{NCE}
 
 Utilité : Retourne l'estimation de la constante et des paramètres.
 
@@ -29,7 +31,7 @@ params\_y & vecteur & c(0,1) & arguments de la fonction law\_y \\ \hline
 log\_pm & fonction &  & fonction qui retourne le logarithme de la densité $p_m$ \\ \hline
 log\_pn & fonction &  & fonction qui retourne le logarithme de la densité $p_n$ \\ \hline
 nb\_of\_params & entier & 3 & taille de $\theta$, vaut habituellement 2 ou 3 \\ \hline
-method & string & "CG" & méthode d'optimisation, habituellement "CG" ou "BFGSé \\ \hline
+method & string & "CG" & méthode d'optimisation, habituellement "CG" ou "BFGS" \\ \hline
 \end{tabular}
 \end{table}
 
