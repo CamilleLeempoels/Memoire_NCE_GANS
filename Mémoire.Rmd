@@ -92,13 +92,13 @@ n & entier & 100 & taille de l'échantillon de bruit suivant la loi $p_n$ \\ \hl
 params\_y & vecteur & c(0,1) & arguments de la fonction law\_y \\ \hline
 log\_pm & fonction &  & fonction qui retourne le logarithme de la densité $p_m$ \\ \hline
 log\_pn & fonction &  & fonction qui retourne le logarithme de la densité $p_n$ \\ \hline
-nb\_of\_params & entier & 3 & taille de $\theta$, vaut habituellement 2 ou 3 \\ \hline
+size\_theta & entier & 3 & taille de $\theta$, vaut habituellement 2 ou 3 \\ \hline
 method & string & "CG" & méthode d'optimisation, habituellement "CG" ou "BFGS" \\ \hline
 \end{tabular}
 \end{table}
 
 ```{r}
-nce = function(x, law_y, n, params_y, log_pm, log_pn, nb_of_params, methode = "CG"){
+nce = function(x, law_y, n, params_y, log_pm, log_pn, size_theta, methode = "CG"){
   
   y = do.call(law_y,c(list(n),params_y))
   
@@ -113,14 +113,42 @@ nce = function(x, law_y, n, params_y, log_pm, log_pn, nb_of_params, methode = "C
   }
   
   theta = optim(
-    par = initialisation,
+    par = rep(1, size_theta),
     gr = methode,
     control = list(fnscale=-1),
     fn = J
   )$par
   
-  return(c(exp(-theta[1]), theta[-1]))
+  return(c(theta[-1], exp(-theta[1])))
 }
+```
+
+
+
+\section{Exemple basique : la loi normale}
+
+Soit $x$ l'échantillon de taille $m$ obtenu selon la loi de densité inconnue $p_d$.
+
+On considère ici que $p_d$ appartient à la famille de fonctions paramétrées par $\theta = (c, \mu, \sigma)$ suivante :
+
+$$p_m(u;\theta) = \frac{1}{Z(\mu, \sigma)} \times exp \big[-\frac{1}{2} \big(\frac{u - \mu}{\sigma} \big)^2 \big]  \quad \mbox{d'où} \quad ln(p_m(u;\theta)) = c - \frac{1}{2} \big(\frac{u}{\sigma} - \frac{\mu}{\sigma} \big)^2$$
+
+```{r}
+log_pm = function(u,theta){
+  return(theta[1] - 1/2 * (u/theta[3] - theta[2]/theta[3]) ** 2)
+  # theta[1] = c / theta[2] = mu / theta[3] = sigma
+}
+
+log_pn_cauchy = function(u){
+  return(log(dcauchy(u, mean(x), sd(x))))
+}
+
+m = 1000
+n = 10000
+x = rnorm(m, 2, 4)
+size_theta = 3
+
+nce(x, rcauchy, n, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta)
 
 ```
 
