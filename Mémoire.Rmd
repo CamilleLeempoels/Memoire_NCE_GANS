@@ -123,6 +123,29 @@ nce = function(x, law_y, n, params_y, log_pm, log_pn, size_theta, methode = "CG"
 }
 ```
 
+\subsection{Graphiques}
+
+```{r}
+library(ggplot2)
+```
+
+Utilité : afficher l'histogramme pour un échantillon de données $x$.
+
+```{r}
+print_hist = function(x) {
+  
+  df = data.frame(x = x)
+  
+  hist_x = ggplot(df, aes(x=x)) + geom_histogram(aes(y = stat(count) / sum(count)), bins = 20, color="white") + theme(aspect.ratio = 1) + labs(y = "Fréquence") + ggtitle("Distribution de l'échantillon x")
+  
+  print(hist_x)
+}
+```
+
+
+```{r}
+
+```
 
 
 \section{Exemple basique : la loi normale}
@@ -150,6 +173,9 @@ size_theta = 3
 
 nce(x, rcauchy, n, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta)
 
+```
+```{r}
+print_hist(x)
 ```
 
 
