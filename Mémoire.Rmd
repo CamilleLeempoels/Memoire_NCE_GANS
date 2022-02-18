@@ -15,6 +15,12 @@ fig_height: 2
 
 \section{Fonctions génériques}
 
+```{r}
+library(ggplot2)
+library(reshape)
+library(matrixStats)
+```
+
 \subsection{Algorithme d'Hasting}
 
 Utilité : simuler selon $p_m(.,\psi)$ pour un paramètre $\psi$ choisi. 
@@ -58,12 +64,14 @@ Note : on peut très certainement écrire sous forme matricielle cette fonction 
 Utilité : retourne une estimation des paramètres selon la méthode décrite dans le papier de Geyer. 
 
 ```{r}
-mc_mle = function(x, n, psi, h){
+mc_mle = function(x, psi, h){
+  
+  m = length(x)
 
-  y = hasting(x, n, psi, h)
+  y = hasting(x, m, psi, h)
     
   L = function(theta){
-    return(sum(log(h(x,theta)/h(x,psi))) - n*log(mean(h(y,theta)/h(y,psi))))
+    return(sum(log(h(x,theta)/h(x,psi))) - m*log(mean(h(y,theta)/h(y,psi))))
   }
   
   theta = optim(
@@ -98,9 +106,9 @@ method & string & "CG" & méthode d'optimisation, habituellement "CG" ou "BFGS" 
 \end{table}
 
 ```{r}
-nce = function(x, law_y, n, params_y, log_pm, log_pn, size_theta, methode = "CG"){
+nce = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, methode = "CG"){
   
-  y = do.call(law_y,c(list(n),params_y))
+  y = do.call(law_y, c(list(n),params_y))
   
   m = length(x)
   
@@ -123,45 +131,58 @@ nce = function(x, law_y, n, params_y, log_pm, log_pn, size_theta, methode = "CG"
 }
 ```
 
-\subsection{Graphiques}
+Utilité : utilise le bootstrap sur x pour estimer les paramètres
 
 ```{r}
-library(ggplot2)
-library(reshape)
+NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n,  nb_of_boot, methode = "CG") {
+
+  theta_bootstrap = c()
+  for (i in 1:nb_of_boot) {
+    x_bootstrap = sample(x, size = m, replace=TRUE)
+    theta_bootstrap = append(theta_bootstrap, nce(x_bootstrap, law_y, params_y, log_pm, log_pn, size_theta, n, methode))
+  }
+  
+  # Formatage des données
+  theta_bootstrap = matrix(theta_bootstrap, nrow = size_theta)
+  
+  # Plot
+  #print(t(rowCumsums(theta_bootstrap)) / 1:nb_of_boot)
+  
+  return(rowMeans(theta_bootstrap))
+}
 ```
+
+\subsection{Graphiques}
 
 Utilité : afficher l'histogramme pour un échantillon de données $x$.
 
 ```{r}
 print_hist = function(x) {
-  
   df = data.frame(x = x)
-  
   hist_x = ggplot(df, aes(x=x)) + geom_histogram(aes(y = stat(count) / sum(count)), bins = 20, color="white") + theme(aspect.ratio = 1) + labs(y = "Fréquence") + ggtitle("Distribution de l'échantillon x")
-  
   print(hist_x)
 }
 ```
 
-Utilité : afficher l'évolution des paramètres au fur et à mesure de l'augmentation de n (la dimension de l'échantillon de bruit)
+Utilité : pour NCE, afficher l'évolution des paramètres au fur et à mesure de l'augmentation de n (la dimension de l'échantillon de bruit)
 
 ```{r}
-evolution_paramètres = function(x, law_y, params_y, log_pm, log_pn, nb_of_params, taille, precision, labels, methode = "CG") {
+NCE_evol_params = function(x, law_y, params_y, log_pm, log_pn, size_theta, ratio, steps, labels, methode = "CG") {
   
   # Creation de l'abscisse
   m = length(x)
-  N = seq(10, m*taille, length.out = precision)
+  N = seq(0, m*ratio, length.out = steps + 1)
   
   # Creation de l'ordonnée
   theta = c()
   for (n in N) {
-    theta = append(theta, nce(x, law_y, n, params_y, log_pm, log_pn, nb_of_params, methode))
+    theta = append(theta, nce(x, law_y, params_y, log_pm, log_pn, size_theta, n, methode))
   }
   
   # Formatage des données
-  theta = t(rbind(matrix(theta, nrow = nb_of_params),N))
+  theta = t(rbind(matrix(theta, nrow = size_theta),N))
   df = as.data.frame(theta)
-  df_melted = melt(df, id.vars = 'N')
+  df_melted = melt(df, id.vars = "N")
   
   # Plot
   plot_df = ggplot(df_melted, aes(x = N, y = value)) + 
@@ -198,20 +219,24 @@ log_pn_cauchy = function(u){
   return(log(dcauchy(u, mean(x), sd(x))))
 }
 
-m = 10000
-n = 100000
+m = 1000
+n = 10000
 x = rnorm(m, 2, 4)
 size_theta = 3
 
 # METHODE MC MLE
-mc_mle(x, m, c(mean(x),sd(x)), pm_barre)
+mc_mle(x, c(mean(x),sd(x)), pm_barre)
 
 # METHODE GEYER
-nce(x, rcauchy, n, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta)
+nce(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n)
 
 ```
 ```{r}
-evolution_paramètres(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 10, 10, c("mu", "sigma", "exp(-c)"))
+NCE_evol_params(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 10, 10, c("mu", "sigma", "exp(-c)"))
+```
+
+```{r}
+(NCE_bootstrap(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n, 10))
 ```
 
 
