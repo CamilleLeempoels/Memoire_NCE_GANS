@@ -176,6 +176,48 @@ NCE_evol_params = function(x, law_y, params_y, log_pm, log_pn, size_theta, ratio
 }
 ```
 
+Note : il faudrait optimiser le temps de calcul de ces fonctions, peut-être en matriciel au lieu des boucles ou bien avec du calcul en parralèle sur CPU/GPU
+
+\section{Exemple basique : la loi normale}
+
+Soit $x$ l'échantillon de taille $m$ obtenu selon la loi de densité inconnue $p_d$.
+
+On considère ici que $p_d$ appartient à la famille de fonctions paramétrées par $\theta = (c, \mu, \sigma)$ suivante :
+
+$$p_m(u;\theta) = \frac{1}{Z(\mu, \sigma)} \times exp \big[-\frac{1}{2} \big(\frac{u - \mu}{\sigma} \big)^2 \big]  \quad \mbox{d'où} \quad ln(p_m(u;\theta)) = c - \frac{1}{2} \big(\frac{u}{\sigma} - \frac{\mu}{\sigma} \big)^2$$
+```{r}
+pm_barre = function(u, theta){
+  return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
+}
+
+log_pm = function(u,theta){
+  return(theta[3] - 1/2 * (u/theta[2] - theta[1]/theta[2]) ** 2)
+  # theta[1] = mu / theta[2] = sigma / theta[3] = c
+}
+
+log_pn_cauchy = function(u){
+  return(log(dcauchy(u, mean(x), sd(x))))
+}
+
+m = 10000
+n = 10000
+x = rnorm(m, 2, 4)
+size_theta = 3
+
+# METHODE MC MLE
+mc_mle(x, c(mean(x),sd(x)), pm_barre)
+
+# METHODE GEYER
+nce(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n)
+
+```
+```{r}
+NCE_evol_params(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 10, 10, c("mu", "sigma", "exp(-c)"))
+```
+
+
+\section{Tentative de bootstrap}
+
 Utilité : utilise le bootstrap sur x pour estimer les paramètres
 
 ```{r}
@@ -206,47 +248,148 @@ NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, nb_o
 }
 ```
 
-Note : il faudrait optimiser le temps de calcul de ces fonctions, peut-être en matriciel au lieu des boucles ou bien avec du calcul en parralèle sur CPU/GPU
-
-\section{Exemple basique : la loi normale}
-
-Soit $x$ l'échantillon de taille $m$ obtenu selon la loi de densité inconnue $p_d$.
-
-On considère ici que $p_d$ appartient à la famille de fonctions paramétrées par $\theta = (c, \mu, \sigma)$ suivante :
-
-$$p_m(u;\theta) = \frac{1}{Z(\mu, \sigma)} \times exp \big[-\frac{1}{2} \big(\frac{u - \mu}{\sigma} \big)^2 \big]  \quad \mbox{d'où} \quad ln(p_m(u;\theta)) = c - \frac{1}{2} \big(\frac{u}{\sigma} - \frac{\mu}{\sigma} \big)^2$$
 ```{r}
-pm_barre = function(u, theta){
-  return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
-}
-
-log_pm = function(u,theta){
-  return(theta[3] - 1/2 * (u/theta[2] - theta[1]/theta[2]) ** 2)
-  # theta[1] = mu / theta[2] = sigma / theta[3] = c
-}
-
-log_pn_cauchy = function(u){
-  return(log(dcauchy(u, mean(x), sd(x))))
-}
-
-m = 10000
-n = 100000
-x = rnorm(m, 2, 4)
-size_theta = 3
-
-# METHODE MC MLE
-mc_mle(x, c(mean(x),sd(x)), pm_barre)
-
-# METHODE GEYER
-nce(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n)
-
+(NCE_bootstrap(rnorm(1000,2,4), rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 1000, 500, c("mu", "sigma", "exp(-c)")))
 ```
+
+
+\section{Tentative récursivité}
+
+Utilité : améliorer récursivement la précision de l'estimation via les estimations précédentes
+
 ```{r}
-NCE_evol_params(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 10, 10, c("mu", "sigma", "exp(-c)"))
+mc_mle_recursif = function(x, psi, h, size_of_loop){
+  
+  m = length(x)
+  
+  for (i in 1:size_of_loop) {
+    y = hasting(x, m, psi, h)
+      
+    L = function(theta){
+      return(sum(log(h(x,theta)/h(x,psi))) - m*log(mean(h(y,theta)/h(y,psi))))
+    }
+    
+    psi = optim(
+      par = rep(1,length(psi)),
+      gr = "CG",
+      control = list(fnscale=-1),
+      fn = L
+    )$par
+    
+    print(psi)
+  }
+
+  return(psi)
+}
 ```
 
 ```{r}
-(NCE_bootstrap(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n, 500, c("mu", "sigma", "exp(-c)")))
+mc_mle_recursif(x, c(mean(x),sd(x)), pm_barre, 10)
+```
+```{r}
+mc_mle_recursif_2 = function(x, psi, h, size_of_loop){
+  
+  m = length(x)
+  M = m
+  
+  for (i in 1:size_of_loop) {
+    y = hasting(x, M, psi, h)
+      
+    L = function(theta){
+      return(sum(log(h(x,theta)/h(x,psi))) - M*log(mean(h(y,theta)/h(y,psi))))
+    }
+    
+    theta = optim(
+      par = rep(1,length(psi)),
+      gr = "CG",
+      control = list(fnscale=-1),
+      fn = L
+    )$par
+    
+    x = append(x, hasting(x, m, theta, h))
+    M = M + m
+    
+    print(theta)
+  }
+
+  return(theta)
+}
 ```
 
+```{r}
+mc_mle_recursif_2(x, c(mean(x),sd(x)), pm_barre, 10)
+```
+```{r}
+mc_mle_recursif_3 = function(x, psi, h, size_of_loop){
+  
+  m = length(x)
+  M = m
+  y = hasting(x, m, psi, h)
+  
+  for (i in 1:size_of_loop) {
+      
+    L = function(theta){
+      return(sum(log(h(x,theta)/h(x,psi))) - M*log(mean(h(y,theta)/h(y,psi))))
+    }
+    
+    theta = optim(
+      par = rep(1,length(psi)),
+      gr = "CG",
+      control = list(fnscale=-1),
+      fn = L
+    )$par
+    
+    x = append(x, hasting(x, m, theta, h))
+    y = append(y, hasting(x, m, psi, h))
+    M = M + m
+    
+    print(theta)
+  }
+
+  return(theta)
+}
+```
+
+```{r}
+mc_mle_recursif_3(x, c(mean(x),sd(x)), pm_barre, 10)
+```
+
+
+```{r}
+nce_recursif = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size_of_loop){
+  
+  y = do.call(law_y, c(list(n),params_y))
+  
+  m = length(x)
+  
+  for (i in 1:size_of_loop){
+  
+    h = function(u, theta){
+      return( 1 / (1 + n/m * exp(log_pn(u) - log_pm(u, theta))))
+    }
+    
+    J = function(theta){
+      return( sum(log(h(x, theta))) + sum(log(1 - h(y, theta))) )
+    }
+    
+    theta = optim(
+      par = rep(1, size_theta),
+      gr = "CG",
+      control = list(fnscale=-1),
+      fn = J
+    )$par
+    
+    print(theta)
+    
+    y = do.call(law_y, c(list(n),theta[-size_theta]))
+    
+  }
+  
+  return(c(theta[-size_theta], exp(-theta[size_theta])))
+}
+```
+
+```{r}
+nce_recursif(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n, 10)
+```
 
