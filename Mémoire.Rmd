@@ -131,27 +131,6 @@ nce = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, methode = "CG"
 }
 ```
 
-Utilité : utilise le bootstrap sur x pour estimer les paramètres
-
-```{r}
-NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n,  nb_of_boot, methode = "CG") {
-
-  theta_bootstrap = c()
-  for (i in 1:nb_of_boot) {
-    x_bootstrap = sample(x, size = m, replace=TRUE)
-    theta_bootstrap = append(theta_bootstrap, nce(x_bootstrap, law_y, params_y, log_pm, log_pn, size_theta, n, methode))
-  }
-  
-  # Formatage des données
-  theta_bootstrap = matrix(theta_bootstrap, nrow = size_theta)
-  
-  # Plot
-  #print(t(rowCumsums(theta_bootstrap)) / 1:nb_of_boot)
-  
-  return(rowMeans(theta_bootstrap))
-}
-```
-
 \subsection{Graphiques}
 
 Utilité : afficher l'histogramme pour un échantillon de données $x$.
@@ -188,7 +167,7 @@ NCE_evol_params = function(x, law_y, params_y, log_pm, log_pn, size_theta, ratio
   plot_df = ggplot(df_melted, aes(x = N, y = value)) + 
   geom_line(aes(color = variable, group = variable)) +
   geom_point(aes(color = variable, group = variable)) +
-  labs(title = "Evolution des paramètres", x = "n", y = "Paramètres", color = "Légende") +
+  labs(title = "Evolution des paramètres par rapport au bruit", x = "n (taille du bruit)", y = "Paramètres", color = "Légende") +
   scale_color_manual(labels = labels, values = c("blue", "red", "orange"))
   
   print(plot_df)
@@ -197,6 +176,37 @@ NCE_evol_params = function(x, law_y, params_y, log_pm, log_pn, size_theta, ratio
 }
 ```
 
+Utilité : utilise le bootstrap sur x pour estimer les paramètres
+
+```{r}
+NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, nb_of_boot, labels, methode = "CG") {
+
+  theta_bootstrap = c()
+  for (i in 1:nb_of_boot) {
+    x_bootstrap = sample(x, size = m, replace=TRUE)
+    theta_bootstrap = append(theta_bootstrap, nce(x_bootstrap, law_y, params_y, log_pm, log_pn, size_theta, n, methode))
+  }
+  
+  # Formatage des données
+  theta_bootstrap = matrix(theta_bootstrap, nrow = size_theta)
+  
+  # Plot
+  size_bootstrap = 1:nb_of_boot
+  df = as.data.frame(cbind(t(rowCumsums(theta_bootstrap)) / size_bootstrap, size_bootstrap))
+  df_melted = melt(df, id.vars = "size_bootstrap")
+  
+  plot_df = ggplot(df_melted, aes(x = size_bootstrap, y = value)) + 
+  geom_line(aes(color = variable, group = variable)) +
+  labs(title = "Evolution des paramètres par bootstrap", x = "Taille du bootstrap", y = "Paramètres", color = "Légende") +
+  scale_color_manual(labels = labels, values = c("blue", "red", "orange"))
+  
+  print(plot_df)
+  
+  return(rowMeans(theta_bootstrap))
+}
+```
+
+Note : il faudrait optimiser le temps de calcul de ces fonctions, peut-être en matriciel au lieu des boucles ou bien avec du calcul en parralèle sur CPU/GPU
 
 \section{Exemple basique : la loi normale}
 
@@ -219,8 +229,8 @@ log_pn_cauchy = function(u){
   return(log(dcauchy(u, mean(x), sd(x))))
 }
 
-m = 1000
-n = 10000
+m = 10000
+n = 100000
 x = rnorm(m, 2, 4)
 size_theta = 3
 
@@ -236,7 +246,7 @@ NCE_evol_params(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta,
 ```
 
 ```{r}
-(NCE_bootstrap(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n, 10))
+(NCE_bootstrap(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n, 500, c("mu", "sigma", "exp(-c)")))
 ```
 
 
