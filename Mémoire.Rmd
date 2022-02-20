@@ -21,6 +21,7 @@ output:
 library(ggplot2)
 library(reshape)
 library(matrixStats)
+library(knitr)
 ```
 
 \subsection{Algorithme d'Hasting}
@@ -222,8 +223,7 @@ mc_mle(x, c(mean(x),sd(x)), pm_barre)
 # METHODE NCE
 nce(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n)
 
-NCE_evol_params(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 10, 10, 
-                c("mu", "sigma", "exp(-c)"))
+NCE_evol_params(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 10, 10, c("mu", "sigma", "exp(-c)"))
 ```
 
 
@@ -231,15 +231,15 @@ NCE_evol_params(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta,
 \section{Nouvelles approches}
 \subsection{Bootstrap}
 
-Utilité : utilise le bootstrap sur x pour estimer les paramètres
 
 ```{r NCE_bootstrap}
-NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size_boot, labels) {
 
+# Calcul de {size_boot} estimateurs par bootstrap
+NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size_boot, labels) {
+  m = length(x)
   theta_bootstrap = c()
-  
+  x_bootstrap = x
   for (i in 1:size_boot) {
-    x_bootstrap = sample(x, size = m, replace=TRUE)
     theta_bootstrap = append(theta_bootstrap, nce(x_bootstrap, 
                                                   law_y, 
                                                   params_y, 
@@ -247,16 +247,20 @@ NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size
                                                   log_pn, 
                                                   size_theta, 
                                                   n))
+    x_bootstrap = sample(x, size = m, replace=TRUE)
   }
+  return(matrix(theta_bootstrap, nrow = size_theta))
+}
+
+# Plot la moyenne empirique des estimateurs bootstrap en fonction du nombre d'estimateurs
+NCE_bootstrap_plot = function(matrix_theta_bootstrap) {
   
-  # Formatage des données
-  theta_bootstrap = matrix(theta_bootstrap, nrow = size_theta)
-  
-  # Plot
-  array_boot = 1:size_boot
-  df = as.data.frame(cbind(t(rowCumsums(theta_bootstrap))/array_boot, array_boot))
+  # Formatage des données pour plot
+  array_boot = 1:length(matrix_theta_bootstrap[1,])
+  df = as.data.frame(cbind(t(rowCumsums(matrix_theta_bootstrap))/array_boot,array_boot))
   df_melted = melt(df, id.vars = "array_boot")
   
+  # Plot
   plot_df = ggplot(df_melted, aes(x = array_boot, y = value)) + 
   geom_line(aes(color = variable, group = variable)) +
   labs(title = "Evolution des paramètres par bootstrap", 
@@ -264,16 +268,30 @@ NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size
        y = "Paramètres", 
        color = "Légende") +
   scale_color_manual(labels = labels, values = c("blue", "red", "orange"))
-  
   print(plot_df)
-  
-  return(rowMeans(theta_bootstrap))
 }
+
+
+# etude bootstrap de l'estimateur
+bootstrap = function(matrix, alpha){
+  return(data.frame(
+    theta = matrix_theta_bootstrap[,1],
+    biais = rowMeans(matrix_theta_bootstrap) - matrix_theta_bootstrap[,1],
+    IC = rowQuantiles(matrix_theta_bootstrap, probs = c(alpha/2, 1-alpha/2))
+  ))
+}
+
 ```
 
 ```{r test_NCE_bootstrap}
-NCE_bootstrap(rnorm(1000,2,4), rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 1000, 500, c("mu", "sigma", "exp(-c)"))
+x_test = rnorm(1000,2,4)
+
+matrix_theta_bootstrap = NCE_bootstrap(x_test, rcauchy, c(mean(x_test),sd(x_test)), log_pm, log_pn_cauchy, 3, 1000, 1000, c("mu", "sigma", "exp(-c)"))
+
+kable(bootstrap(matrix_theta_bootstrap, 0.05))
 ```
+
+
 
 \subsection{Récursivité}
 
