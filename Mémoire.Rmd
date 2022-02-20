@@ -7,12 +7,14 @@ header-includes:
   - \usepackage{amsmath}
   - \usepackage{mdframed}
   - \usepackage{placeins}
-output: pdf_document
-fig_width: 3
-fig_height: 2
+output: 
+  pdf_document:
+    number_sections: true
 ---
 
+\tableofcontents
 
+\newpage
 \section{Fonctions génériques}
 
 ```{r}
@@ -36,7 +38,7 @@ h & fonction &  & fonction qui retourne $\overline{p_m}(.,\psi)$\\ \hline
 \end{tabular}
 \end{table}
 
-```{r}
+```{r hasting}
 hasting = function(x, n, psi, h){
   y = c()
   y = append(y, sample(sample(x, 1)))
@@ -63,7 +65,7 @@ Note : on peut très certainement écrire sous forme matricielle cette fonction 
 
 Utilité : retourne une estimation des paramètres selon la méthode décrite dans le papier de Geyer. 
 
-```{r}
+```{r mcmle}
 mc_mle = function(x, psi, h){
   
   m = length(x)
@@ -105,8 +107,8 @@ method & string & "CG" & méthode d'optimisation, habituellement "CG" ou "BFGS" 
 \end{tabular}
 \end{table}
 
-```{r}
-nce = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, methode = "CG"){
+```{r nce}
+nce = function(x, law_y, params_y, log_pm, log_pn, size_theta, n){
   
   y = do.call(law_y, c(list(n),params_y))
   
@@ -122,7 +124,7 @@ nce = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, methode = "CG"
   
   theta = optim(
     par = rep(1, size_theta),
-    gr = methode,
+    gr = "CG",
     control = list(fnscale=-1),
     fn = J
   )$par
@@ -135,18 +137,22 @@ nce = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, methode = "CG"
 
 Utilité : afficher l'histogramme pour un échantillon de données $x$.
 
-```{r}
+```{r print_hist}
 print_hist = function(x) {
   df = data.frame(x = x)
-  hist_x = ggplot(df, aes(x=x)) + geom_histogram(aes(y = stat(count) / sum(count)), bins = 20, color="white") + theme(aspect.ratio = 1) + labs(y = "Fréquence") + ggtitle("Distribution de l'échantillon x")
+  hist_x = ggplot(df, aes(x=x)) + 
+           geom_histogram(aes(y = stat(count)/sum(count)), bins = 20, color="white") + 
+           theme(aspect.ratio = 1) + 
+           labs(y = "Fréquence") + 
+           ggtitle("Distribution de l'échantillon x")
   print(hist_x)
 }
 ```
 
 Utilité : pour NCE, afficher l'évolution des paramètres au fur et à mesure de l'augmentation de n (la dimension de l'échantillon de bruit)
 
-```{r}
-NCE_evol_params = function(x, law_y, params_y, log_pm, log_pn, size_theta, ratio, steps, labels, methode = "CG") {
+```{r NCE_evol_params}
+NCE_evol_params = function(x, law_y, params_y, log_pm, log_pn, size_theta, ratio, steps, labels) {
   
   # Creation de l'abscisse
   m = length(x)
@@ -155,7 +161,7 @@ NCE_evol_params = function(x, law_y, params_y, log_pm, log_pn, size_theta, ratio
   # Creation de l'ordonnée
   theta = c()
   for (n in N) {
-    theta = append(theta, nce(x, law_y, params_y, log_pm, log_pn, size_theta, n, methode))
+    theta = append(theta, nce(x, law_y, params_y, log_pm, log_pn, size_theta, n))
   }
   
   # Formatage des données
@@ -167,25 +173,31 @@ NCE_evol_params = function(x, law_y, params_y, log_pm, log_pn, size_theta, ratio
   plot_df = ggplot(df_melted, aes(x = N, y = value)) + 
   geom_line(aes(color = variable, group = variable)) +
   geom_point(aes(color = variable, group = variable)) +
-  labs(title = "Evolution des paramètres par rapport au bruit", x = "n (taille du bruit)", y = "Paramètres", color = "Légende") +
+  labs(title = "Evolution des paramètres par rapport au bruit", 
+       x = "n (taille du bruit)", 
+       y = "Paramètres", 
+       color = "Légende") +
   scale_color_manual(labels = labels, values = c("blue", "red", "orange"))
   
   print(plot_df)
   
-  return(theta)
+  #return(theta)
 }
 ```
 
 Note : il faudrait optimiser le temps de calcul de ces fonctions, peut-être en matriciel au lieu des boucles ou bien avec du calcul en parralèle sur CPU/GPU
 
-\section{Exemple basique : la loi normale}
+\newpage
+
+\section{Applications}
+\subsection{Exemple basique : la loi normale}
 
 Soit $x$ l'échantillon de taille $m$ obtenu selon la loi de densité inconnue $p_d$.
 
 On considère ici que $p_d$ appartient à la famille de fonctions paramétrées par $\theta = (c, \mu, \sigma)$ suivante :
 
 $$p_m(u;\theta) = \frac{1}{Z(\mu, \sigma)} \times exp \big[-\frac{1}{2} \big(\frac{u - \mu}{\sigma} \big)^2 \big]  \quad \mbox{d'où} \quad ln(p_m(u;\theta)) = c - \frac{1}{2} \big(\frac{u}{\sigma} - \frac{\mu}{\sigma} \big)^2$$
-```{r}
+```{r exemple1}
 pm_barre = function(u, theta){
   return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
 }
@@ -207,39 +219,50 @@ size_theta = 3
 # METHODE MC MLE
 mc_mle(x, c(mean(x),sd(x)), pm_barre)
 
-# METHODE GEYER
+# METHODE NCE
 nce(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n)
 
-```
-```{r}
-NCE_evol_params(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 10, 10, c("mu", "sigma", "exp(-c)"))
+NCE_evol_params(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 10, 10, 
+                c("mu", "sigma", "exp(-c)"))
 ```
 
 
-\section{Tentative de bootstrap}
+\newpage
+\section{Nouvelles approches}
+\subsection{Bootstrap}
 
 Utilité : utilise le bootstrap sur x pour estimer les paramètres
 
-```{r}
-NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, nb_of_boot, labels, methode = "CG") {
+```{r NCE_bootstrap}
+NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size_boot, labels) {
 
   theta_bootstrap = c()
-  for (i in 1:nb_of_boot) {
+  
+  for (i in 1:size_boot) {
     x_bootstrap = sample(x, size = m, replace=TRUE)
-    theta_bootstrap = append(theta_bootstrap, nce(x_bootstrap, law_y, params_y, log_pm, log_pn, size_theta, n, methode))
+    theta_bootstrap = append(theta_bootstrap, nce(x_bootstrap, 
+                                                  law_y, 
+                                                  params_y, 
+                                                  log_pm, 
+                                                  log_pn, 
+                                                  size_theta, 
+                                                  n))
   }
   
   # Formatage des données
   theta_bootstrap = matrix(theta_bootstrap, nrow = size_theta)
   
   # Plot
-  size_bootstrap = 1:nb_of_boot
-  df = as.data.frame(cbind(t(rowCumsums(theta_bootstrap)) / size_bootstrap, size_bootstrap))
-  df_melted = melt(df, id.vars = "size_bootstrap")
+  array_boot = 1:size_boot
+  df = as.data.frame(cbind(t(rowCumsums(theta_bootstrap))/array_boot, array_boot))
+  df_melted = melt(df, id.vars = "array_boot")
   
-  plot_df = ggplot(df_melted, aes(x = size_bootstrap, y = value)) + 
+  plot_df = ggplot(df_melted, aes(x = array_boot, y = value)) + 
   geom_line(aes(color = variable, group = variable)) +
-  labs(title = "Evolution des paramètres par bootstrap", x = "Taille du bootstrap", y = "Paramètres", color = "Légende") +
+  labs(title = "Evolution des paramètres par bootstrap", 
+       x = "Taille du bootstrap", 
+       y = "Paramètres", 
+       color = "Légende") +
   scale_color_manual(labels = labels, values = c("blue", "red", "orange"))
   
   print(plot_df)
@@ -248,16 +271,15 @@ NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, nb_o
 }
 ```
 
-```{r}
-(NCE_bootstrap(rnorm(1000,2,4), rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 1000, 500, c("mu", "sigma", "exp(-c)")))
+```{r test_NCE_bootstrap}
+NCE_bootstrap(rnorm(1000,2,4), rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 1000, 500, c("mu", "sigma", "exp(-c)"))
 ```
 
-
-\section{Tentative récursivité}
+\subsection{Récursivité}
 
 Utilité : améliorer récursivement la précision de l'estimation via les estimations précédentes
 
-```{r}
+```{r mc_mle_recursif}
 mc_mle_recursif = function(x, psi, h, size_of_loop){
   
   m = length(x)
@@ -283,10 +305,11 @@ mc_mle_recursif = function(x, psi, h, size_of_loop){
 }
 ```
 
-```{r}
+```{r test_mc_mle_recursif}
 mc_mle_recursif(x, c(mean(x),sd(x)), pm_barre, 10)
 ```
-```{r}
+
+```{r mc_mle_recursif_2}
 mc_mle_recursif_2 = function(x, psi, h, size_of_loop){
   
   m = length(x)
@@ -316,10 +339,11 @@ mc_mle_recursif_2 = function(x, psi, h, size_of_loop){
 }
 ```
 
-```{r}
+```{r test_mc_mle_recursif_2}
 mc_mle_recursif_2(x, c(mean(x),sd(x)), pm_barre, 10)
 ```
-```{r}
+
+```{r mc_mle_recursif_3}
 mc_mle_recursif_3 = function(x, psi, h, size_of_loop){
   
   m = length(x)
@@ -350,12 +374,12 @@ mc_mle_recursif_3 = function(x, psi, h, size_of_loop){
 }
 ```
 
-```{r}
+```{r test_mc_mle_recursif_3}
 mc_mle_recursif_3(x, c(mean(x),sd(x)), pm_barre, 10)
 ```
 
 
-```{r}
+```{r nce_recursif}
 nce_recursif = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size_of_loop){
   
   y = do.call(law_y, c(list(n),params_y))
@@ -389,11 +413,6 @@ nce_recursif = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size_
 }
 ```
 
-```{r}
+```{r test_nce_recursif}
 nce_recursif(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n, 10)
 ```
-
-
-testtes
-
-Test 2
