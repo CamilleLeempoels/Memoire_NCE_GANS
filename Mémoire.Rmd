@@ -22,6 +22,7 @@ library(ggplot2)
 library(reshape)
 library(matrixStats)
 library(knitr)
+library(dplyr)
 ```
 
 \subsection{Algorithme d'Hasting}
@@ -67,11 +68,11 @@ Note : on peut très certainement écrire sous forme matricielle cette fonction 
 Utilité : retourne une estimation des paramètres selon la méthode décrite dans le papier de Geyer. 
 
 ```{r mcmle}
-mc_mle = function(x, psi, h){
+mc_mle = function(x, n, psi, h){
   
   m = length(x)
 
-  y = hasting(x, m, psi, h)
+  y = hasting(x, n, psi, h)
     
   L = function(theta){
     return(sum(log(h(x,theta)/h(x,psi))) - m*log(mean(h(y,theta)/h(y,psi))))
@@ -188,6 +189,7 @@ NCE_evol_params = function(x, law_y, params_y, log_pm, log_pn, size_theta, ratio
 
 Note : il faudrait optimiser le temps de calcul de ces fonctions, peut-être en matriciel au lieu des boucles ou bien avec du calcul en parralèle sur CPU/GPU
 
+
 \newpage
 
 \section{Applications}
@@ -216,15 +218,49 @@ m = 10000
 n = 10000
 x = rnorm(m, 2, 4)
 size_theta = 3
+```
 
+```{r}
 # METHODE MC MLE
-mc_mle(x, c(mean(x),sd(x)), pm_barre)
+mc_mle(x, n, c(mean(x),sd(x)), pm_barre)
+```
 
+Crée un graphique qui prouve la convergence quand le ratio est de plus en plus élevé pour NCE.
+
+```{r}
+df_mcmle_2 = data.frame(matrix(ncol = 4, nrow = 0))
+colnames(df_mcmle_2) = c("param_1", "param_2", "size_data", "ratio_noise_data")
+
+M = c(1000, 10000)
+
+
+for (m in M){
+  x = rnorm(m, 2, 4)
+  psi = c(mean(x), sd(x))
+  N = c(1, 10)
+  for (n in N) {
+    for (i in 1:100) {
+       df_mcmle_2[nrow(df_mcmle_2) + 1, ] = c(mc_mle(x, m*n, psi, pm_barre), m, n)
+    }
+  }
+}
+
+df_mcmle_2$size_data = as.factor(df_mcmle_2$size_data)
+df_mcmle_2$ratio_noise_data = as.factor(df_mcmle_2$ratio_noise_data)
+
+df_mcmle_filt = filter(df_mcmle_2, param_2 <= 6 & param_2 >= 0 & param_1 >= -2 & param_1 <= 6)
+
+ggplot(df_mcmle_filt, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point()
+```
+
+
+```{r}
 # METHODE NCE
 nce(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n)
 
 NCE_evol_params(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 10, 10, c("mu", "sigma", "exp(-c)"))
 ```
+
 
 
 \newpage
@@ -297,16 +333,18 @@ kable(bootstrap(matrix_theta_bootstrap, 0.05))
 
 Utilité : améliorer récursivement la précision de l'estimation via les estimations précédentes
 
-```{r mc_mle_recursif}
-mc_mle_recursif = function(x, psi, h, size_of_loop){
+```{r mc_mle_recursif_3}
+mc_mle_recursif_3 = function(x, n, psi, h, size_of_loop){
   
   m = length(x)
-  
+  Y = c(hasting(x, n, psi, h))
+  H_x = c(h(x,psi))
+  H_y = c(h(Y,psi))
+
   for (i in 1:size_of_loop) {
-    y = hasting(x, m, psi, h)
-      
+
     L = function(theta){
-      return(sum(log(h(x,theta)/h(x,psi))) - m*log(mean(h(y,theta)/h(y,psi))))
+      return(sum(log(h(x,theta)/(H_x/i))) - m*log(mean(h(Y,theta)/(H_y/i))))
     }
     
     psi = optim(
@@ -316,6 +354,11 @@ mc_mle_recursif = function(x, psi, h, size_of_loop){
       fn = L
     )$par
     
+    y = hasting(x, n, psi, h)
+    Y = append(Y, y)
+    H_x = append(H_x, h(x,psi))
+    H_y = append(H_y, h(y,psi))
+    
     print(psi)
   }
 
@@ -323,77 +366,11 @@ mc_mle_recursif = function(x, psi, h, size_of_loop){
 }
 ```
 
-```{r test_mc_mle_recursif}
-mc_mle_recursif(x, c(mean(x),sd(x)), pm_barre, 10)
-```
-
-```{r mc_mle_recursif_2}
-mc_mle_recursif_2 = function(x, psi, h, size_of_loop){
-  
-  m = length(x)
-  M = m
-  
-  for (i in 1:size_of_loop) {
-    y = hasting(x, M, psi, h)
-      
-    L = function(theta){
-      return(sum(log(h(x,theta)/h(x,psi))) - M*log(mean(h(y,theta)/h(y,psi))))
-    }
-    
-    theta = optim(
-      par = rep(1,length(psi)),
-      gr = "CG",
-      control = list(fnscale=-1),
-      fn = L
-    )$par
-    
-    x = append(x, hasting(x, m, theta, h))
-    M = M + m
-    
-    print(theta)
-  }
-
-  return(theta)
-}
-```
-
-```{r test_mc_mle_recursif_2}
-mc_mle_recursif_2(x, c(mean(x),sd(x)), pm_barre, 10)
-```
-
-```{r mc_mle_recursif_3}
-mc_mle_recursif_3 = function(x, psi, h, size_of_loop){
-  
-  m = length(x)
-  M = m
-  y = hasting(x, m, psi, h)
-  
-  for (i in 1:size_of_loop) {
-      
-    L = function(theta){
-      return(sum(log(h(x,theta)/h(x,psi))) - M*log(mean(h(y,theta)/h(y,psi))))
-    }
-    
-    theta = optim(
-      par = rep(1,length(psi)),
-      gr = "CG",
-      control = list(fnscale=-1),
-      fn = L
-    )$par
-    
-    x = append(x, hasting(x, m, theta, h))
-    y = append(y, hasting(x, m, psi, h))
-    M = M + m
-    
-    print(theta)
-  }
-
-  return(theta)
-}
-```
-
 ```{r test_mc_mle_recursif_3}
-mc_mle_recursif_3(x, c(mean(x),sd(x)), pm_barre, 10)
+m = 10000
+n = 10000
+x = rnorm(m, 2, 4)
+mc_mle_recursif_3(x, n, c(mean(x),sd(x)), pm_barre, 10)
 ```
 
 
