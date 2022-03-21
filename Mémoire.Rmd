@@ -63,7 +63,7 @@ hasting = function(x, n, psi, h){
 
 Note : on peut très certainement écrire sous forme matricielle cette fonction pour une meilleure performance.
 
-\subsection{MC MLE}
+\subsection{MC MLE (Geyer)}
 
 Utilité : retourne une estimation des paramètres selon la méthode décrite dans le papier de Geyer. 
 
@@ -90,7 +90,7 @@ mc_mle = function(x, n, psi, h){
 ```
 
 
-\subsection{NCE}
+\subsection{NCE (Gutmann)}
 
 Utilité : Retourne l'estimation de la constante et des paramètres.
 
@@ -220,14 +220,15 @@ x = rnorm(m, 2, 4)
 size_theta = 3
 ```
 
+
 ```{r}
 # METHODE MC MLE
-mc_mle(x, n, c(mean(x),sd(x)), pm_barre)
+alpha = mc_mle(x, n, c(mean(x),sd(x)), pm_barre)
 ```
 
 Crée un graphique qui prouve la convergence quand le ratio est de plus en plus élevé pour NCE.
 
-```{r}
+```{r eval=FALSE, include=TRUE}
 df_mcmle_2 = data.frame(matrix(ncol = 4, nrow = 0))
 colnames(df_mcmle_2) = c("param_1", "param_2", "size_data", "ratio_noise_data")
 
@@ -410,4 +411,45 @@ nce_recursif = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size_
 
 ```{r test_nce_recursif}
 nce_recursif(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n, 10)
+```
+
+
+\subsection{Reverse logistic regression}
+
+La maximisation de la fonction objectif $$l_n(\eta) = \sum_{j=1}^m \sum_{i=1}^{n_j} log(p_j(X_{i,j}, \eta))$$ permet d'estimer les $\eta$ (qui sont fonction des constantes de normalisation des $h_j$). On utilise les notations suivantes :
+
+$$\eta_j = -log(Z_j) + log(\frac{n_j}{n}) ~\mbox{ avec } Z_j \mbox{ la constante de normalisation de } h_j$$
+$$p_j(x) = \frac{h_j(x)e^{\eta_j}}{\sum_{k=1}^m h_k(x)e^{\eta_k}}$$
+Exemple avec $m=2$, $n = n_1 + n_2 = 1000 + 1000$, et pour coller avec les méthodes différentes on va prendre $h_1$ la densité non normalisée d'une $\mathscr{N}(\alpha)$ dont on a estimé $\alpha$ par MC MLE et $h_2$ la densité non normalisée d'une $\mathscr{N}(\psi)$ avec $\psi$ qu'on choisit. 
+
+```{r}
+# REVERSE LOGISTIC REGRESSION
+
+pm_barre = function(u, theta){
+  return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
+}
+
+x_test = rnorm(100000, 2, 4)
+y_test = rnorm(100000, 2, 4)
+  
+f_test = function(eta) {
+  alpha = c(2,4)
+  psi = c(3,5)
+  n1 = length(x_test)
+  n2 = length(y_test)
+  return(
+    sum(log(pm_barre(x_test, alpha)*exp(eta[1]) / (pm_barre(x_test, alpha)*exp(eta[1]) + pm_barre(x_test, psi)*exp(eta[2]))))
+    +
+    sum(log(pm_barre(y_test, psi)*exp(eta[2]) / (pm_barre(y_test, psi)*exp(eta[2]) + pm_barre(y_test, alpha)*exp(eta[1]))))
+    )
+}
+
+  
+const_test = optim(
+    par = c(0,0),
+    gr = "CG",
+    control = list(fnscale=-1),
+    fn = f_test
+  )$par
+print(exp(-const_test + log(0.5)))
 ```
