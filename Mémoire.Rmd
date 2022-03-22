@@ -262,7 +262,7 @@ nce(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n)
 NCE_evol_params(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 10, 10, c("mu", "sigma", "exp(-c)"))
 ```
 
-```{r}
+```{r eval=FALSE, include=TRUE}
 df_nce = data.frame(matrix(ncol = 5, nrow = 0))
 colnames(df_nce) = c("param_1", "param_2", "const", "size_data", "ratio_noise_data")
 
