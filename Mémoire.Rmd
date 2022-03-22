@@ -223,13 +223,13 @@ size_theta = 3
 
 ```{r}
 # METHODE MC MLE
-alpha = mc_mle(x, n, c(mean(x),sd(x)), pm_barre)
+mc_mle(x, n, c(mean(x),sd(x)), pm_barre)
 ```
 
 Crée un graphique qui prouve la convergence quand le ratio est de plus en plus élevé pour NCE.
 
 ```{r eval=FALSE, include=TRUE}
-df_mcmle_2 = data.frame(matrix(ncol = 4, nrow = 0))
+df_mcmle = data.frame(matrix(ncol = 4, nrow = 0))
 colnames(df_mcmle_2) = c("param_1", "param_2", "size_data", "ratio_noise_data")
 
 M = c(1000, 10000)
@@ -262,7 +262,40 @@ nce(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n)
 NCE_evol_params(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 10, 10, c("mu", "sigma", "exp(-c)"))
 ```
 
+```{r}
+df_nce = data.frame(matrix(ncol = 5, nrow = 0))
+colnames(df_nce) = c("param_1", "param_2", "const", "size_data", "ratio_noise_data")
 
+M = c(1000, 10000, 100000)
+
+
+for (m in M){
+  x = rnorm(m, 2, 4)
+  psi = c(mean(x), sd(x))
+  N = c(1, 10)
+  for (n in N) {
+    for (i in 1:50) {
+       df_nce[nrow(df_nce) + 1, ] = c(nce(x, rcauchy, psi, log_pm, log_pn_cauchy, size_theta, m*n), m, n)
+    }
+  }
+}
+
+df_nce$size_data = as.factor(df_nce$size_data)
+df_nce$ratio_noise_data = as.factor(df_nce$ratio_noise_data)
+```
+
+```{r}
+write.csv(df_nce, "df_nce.csv")
+```
+
+
+```{r}
+ggplot(df_nce, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point()
+```
+
+```{r}
+ggplot(df_nce, aes(x = ratio_noise_data, y = const, color = size_data)) + geom_point()
+```
 
 \newpage
 \section{Nouvelles approches}
