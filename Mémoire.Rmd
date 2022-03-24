@@ -17,12 +17,13 @@ output:
 \newpage
 \section{Fonctions génériques}
 
-```{r}
+```{r include=FALSE}
 library(ggplot2)
 library(reshape)
 library(matrixStats)
 library(knitr)
 library(dplyr)
+library(tidyverse)
 ```
 
 \subsection{Algorithme d'Hasting}
@@ -220,15 +221,14 @@ x = rnorm(m, 2, 4)
 size_theta = 3
 ```
 
-
 ```{r}
 # METHODE MC MLE
 mc_mle(x, n, c(mean(x),sd(x)), pm_barre)
 ```
 
-Crée un graphique qui prouve la convergence quand le ratio est de plus en plus élevé pour NCE.
+```{r eval=FALSE, include=FALSE}
+#NE PAS FAIRE TOURNER CETTE CELLULE, HYPER LONG, IMPORTER LE CSV A LA PLACE
 
-```{r eval=FALSE, include=TRUE}
 df_mcmle = data.frame(matrix(ncol = 4, nrow = 0))
 colnames(df_mcmle_2) = c("param_1", "param_2", "size_data", "ratio_noise_data")
 
@@ -245,12 +245,18 @@ for (m in M){
     }
   }
 }
+```
 
-df_mcmle_2$size_data = as.factor(df_mcmle_2$size_data)
-df_mcmle_2$ratio_noise_data = as.factor(df_mcmle_2$ratio_noise_data)
 
-df_mcmle_filt = filter(df_mcmle_2, param_2 <= 6 & param_2 >= 0 & param_1 >= -2 & param_1 <= 6)
+```{r include=FALSE}
+df_mcmle <- read_csv("df_mcmle.csv")[,-1]
 
+df_mcmle$size_data = as.factor(df_mcmle$size_data)
+df_mcmle$ratio_noise_data = as.factor(df_mcmle$ratio_noise_data)
+
+df_mcmle_filt = filter(df_mcmle, param_2 <= 6 & param_2 >= 0 & param_1 >= -2 & param_1 <= 6)
+```
+```{r}
 ggplot(df_mcmle_filt, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point()
 ```
 
@@ -262,7 +268,7 @@ nce(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n)
 NCE_evol_params(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, 10, 10, c("mu", "sigma", "exp(-c)"))
 ```
 
-```{r eval=FALSE, include=TRUE}
+```{r eval=FALSE, include=FALSE}
 df_nce = data.frame(matrix(ncol = 5, nrow = 0))
 colnames(df_nce) = c("param_1", "param_2", "const", "size_data", "ratio_noise_data")
 
@@ -279,13 +285,19 @@ for (m in M){
     }
   }
 }
+write.csv(df_nce, "df_nce.csv")
 
 df_nce$size_data = as.factor(df_nce$size_data)
 df_nce$ratio_noise_data = as.factor(df_nce$ratio_noise_data)
 ```
 
-```{r}
-write.csv(df_nce, "df_nce.csv")
+```{r include=FALSE}
+df_nce <- read_csv("df_nce.csv")[,-1]
+
+df_nce$size_data = as.factor(df_nce$size_data)
+df_nce$ratio_noise_data = as.factor(df_nce$ratio_noise_data)
+
+df_nce$const_error = abs(df_nce$const - 4*sqrt(2*pi))
 ```
 
 
@@ -294,7 +306,7 @@ ggplot(df_nce, aes(x = param_1, y = param_2, color = size_data, shape = ratio_no
 ```
 
 ```{r}
-ggplot(df_nce, aes(x = ratio_noise_data, y = const, color = size_data)) + geom_point()
+ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + geom_boxplot()
 ```
 
 \newpage
@@ -456,7 +468,6 @@ $$p_j(x) = \frac{h_j(x)e^{\eta_j}}{\sum_{k=1}^m h_k(x)e^{\eta_k}}$$
 Exemple avec $m=2$, $n = n_1 + n_2 = 1000 + 1000$, et pour coller avec les méthodes différentes on va prendre $h_1$ la densité non normalisée d'une $\mathscr{N}(\alpha)$ dont on a estimé $\alpha$ par MC MLE et $h_2$ la densité non normalisée d'une $\mathscr{N}(\psi)$ avec $\psi$ qu'on choisit. 
 
 ```{r}
-# REVERSE LOGISTIC REGRESSION
 
 pm_barre = function(u, theta){
   return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
