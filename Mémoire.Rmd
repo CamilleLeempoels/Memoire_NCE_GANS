@@ -379,44 +379,83 @@ kable(bootstrap(matrix_theta_bootstrap, 0.05))
 
 Utilité : améliorer récursivement la précision de l'estimation via les estimations précédentes
 
-```{r mc_mle_recursif_3}
+```{r mc_mle_recursif}
+m = 10000
+n = 10000
+x = rnorm(m, 2, 4)
+psi = c(mean(x),sd(x))
+
+PSI = data.frame(matrix(ncol = 3, nrow = 0))
+colnames(PSI) = c("iteration", "param_1", "param_2")
+
+for (i in 1:100) {
+  y = hasting(x, n, psi, pm_barre)
+  PSI[nrow(PSI) + 1, ] = c(i, psi)
+
+  L = function(theta){
+    return(sum(log(pm_barre(x,theta)/pm_barre(x,psi))) - m*log(mean(pm_barre(y,theta)/pm_barre(y,psi))))
+  }
+  
+  psi = optim(
+    par = rep(1,length(psi)),
+    gr = "CG",
+    control = list(fnscale=-1),
+    fn = L
+  )$par
+}
+```
+
+```{r}
+ggplot(PSI, aes(x = param_1, y = param_2, color = iteration)) + geom_point()
+```
+```{r}
+PSI_melted = melt(PSI, id.vars = "iteration")
+ggplot(PSI_melted, aes(x = iteration, y = value)) + geom_line(aes(color = variable, group = variable)) 
+```
+Cette approche n'améliore pas la précision de notre estimation.
+
+
+```{r mc_mle_recursif_3, eval=FALSE, include=FALSE}
 mc_mle_recursif_3 = function(x, n, psi, h, size_of_loop){
   
   m = length(x)
+  PSI = data.frame(matrix(ncol = 2, nrow = 0))
+  colnames(PSI) = c("param_1", "param_2")
+  denom_x = 1
+  denom_y = 1
   Y = c(hasting(x, n, psi, h))
-  H_x = c(h(x,psi))
-  H_y = c(h(Y,psi))
+  PSI[nrow(PSI) + 1, ] = psi
+  print(PSI)
 
   for (i in 1:size_of_loop) {
+    print(PSI)
+    print(denom_x)
+    print(denom_y)
 
     L = function(theta){
-      return(sum(log(h(x,theta)/(H_x/i))) - m*log(mean(h(Y,theta)/(H_y/i))))
+      return(sum(log(denom_x * h(x,theta)/h(x,PSI[i,]))) - m*log(mean(denom_y * h(Y,theta)/h(Y,PSI[i,]))))
+      #return(sum(log(h(x,theta)/h(x,psi))) - m*log(mean(h(y,theta)/h(y,psi))))
     }
     
-    psi = optim(
+    PSI[nrow(PSI) + 1, ] = optim(
       par = rep(1,length(psi)),
       gr = "CG",
       control = list(fnscale=-1),
       fn = L
     )$par
     
-    y = hasting(x, n, psi, h)
-    Y = append(Y, y)
-    H_x = append(H_x, h(x,psi))
-    H_y = append(H_y, h(y,psi))
+    Y = append(Y, hasting(x, n, PSI[i,], h))
     
-    print(psi)
+    denom_x = 0
+    for (k in 1:i) {denom_x = denom_x + h(x, PSI[k,])}
+    denom_y = 0
+    for (k in 1:i) {denom_y = denom_y + h(Y, PSI[k,])}
   }
 
-  return(psi)
+  return(PSI)
 }
-```
 
-```{r test_mc_mle_recursif_3}
-m = 10000
-n = 10000
-x = rnorm(m, 2, 4)
-mc_mle_recursif_3(x, n, c(mean(x),sd(x)), pm_barre, 10)
+mc_mle_recursif_3(x, n, psi, pm_barre, 10)
 ```
 
 
@@ -478,7 +517,7 @@ y_test = rnorm(100000, 2, 4)
   
 f_test = function(eta) {
   alpha = c(2,4)
-  psi = c(3,5)
+  psi = c(2,4)
   n1 = length(x_test)
   n2 = length(y_test)
   return(
