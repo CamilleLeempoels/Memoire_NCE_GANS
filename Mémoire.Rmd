@@ -225,7 +225,9 @@ size_theta = 3
 # METHODE MC MLE
 mc_mle(x, n, c(mean(x),sd(x)), pm_barre)
 ```
+
 Etudions l'impact de la dimension des échantillons sur la convergence des estimateurs.
+
 ```{r eval=FALSE, include=FALSE}
 #NE PAS FAIRE TOURNER CETTE CELLULE, HYPER LONG, IMPORTER LE CSV A LA PLACE
 
@@ -274,8 +276,14 @@ for (k in psi_1){
      df_mcmle_psi[nrow(df_mcmle_psi) + 1, ] = c(mc_mle(x, m*10, c(k, k+2), pm_barre), k, k+2)
   }
 }
+
 ```
 
+```{r}
+df_mcmle_psi$psi_1 = as.factor(df_mcmle_psi$psi_1)
+df_mcmle_psi = filter(df_mcmle_psi, param_1 <= 3)
+ggplot(df_mcmle_psi, aes(x = param_1, y = param_2, color = psi_1)) + geom_point()
+```
 
 
 ```{r}
@@ -433,6 +441,8 @@ Cette approche n'améliore pas la précision de notre estimation.
 
 
 ```{r mc_mle_recursif_3, eval=FALSE, include=FALSE}
+#NE FONCTIONNE PAS ENCORE
+
 mc_mle_recursif_3 = function(x, n, psi, h, size_of_loop){
   
   m = length(x)
