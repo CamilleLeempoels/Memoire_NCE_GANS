@@ -44,7 +44,7 @@ h & fonction &  & fonction qui retourne $\overline{p_m}(.,\psi)$\\ \hline
 ```{r hasting}
 hasting = function(x, n, psi, h){
   y = c()
-  y = append(y, sample(sample(x, 1)))
+  y = append(y, sample(x, 1))
   for (i in 2:n){
     y_ = rnorm(1, y[i-1], 1)
     u = runif(1)
@@ -75,11 +75,11 @@ $\epsilon$ & Entier & 2 & pas de décorrélation $\overline{p_m}(.,\psi)$\\ \hli
 \end{tabular}
 \end{table}
 
-```{r hasting iid}
-hasting = function(x, n, psi, h){
+```{r hasting iid }
+hasting_iid = function(x, n, psi, h, eps){
   y = c()
-  y = append(y, sample(sample(x, 1)))
-  for (i in 2:n){
+  y = append(y, sample(x, 1))
+  for (i in 2:(n*eps)){
     y_ = rnorm(1, y[i-1], 1)
     u = runif(1)
     if ( u <= 
@@ -91,10 +91,10 @@ hasting = function(x, n, psi, h){
       y = append(y, y[i-1])
     }
   }
-  return (y)
+  filter = y * rep(c(1,rep(0, eps-1)), n)
+  return (filter[filter != 0])
 }
 ```
-
 
 \subsection{MC MLE (Geyer)}
 
@@ -138,7 +138,6 @@ params\_y & vecteur & c(0,1) & arguments de la fonction law\_y \\ \hline
 log\_pm & fonction &  & fonction qui retourne le logarithme de la densité $p_m$ \\ \hline
 log\_pn & fonction &  & fonction qui retourne le logarithme de la densité $p_n$ \\ \hline
 size\_theta & entier & 3 & taille de $\theta$, vaut habituellement 2 ou 3 \\ \hline
-method & string & "CG" & méthode d'optimisation, habituellement "CG" ou "BFGS" \\ \hline
 \end{tabular}
 \end{table}
 
@@ -529,10 +528,10 @@ $$p_j(x) = \frac{h_j(x)e^{\eta_j}}{\sum_{k=1}^m h_k(x)e^{\eta_k}}$$
 Exemple avec $m=2$, $n = n_1 + n_2 = 1000 + 1000$, et pour coller avec les méthodes différentes on va prendre $h_1$ la densité non normalisée d'une $\mathscr{N}(\alpha)$ dont on a estimé $\alpha$ par MC MLE et $h_2$ la densité non normalisée d'une $\mathscr{N}(\psi)$ avec $\psi$ qu'on choisit. 
 
 ```{r rev_log_reg}
-rev_log_reg = function(x, alpha, n, psi, h){
+rev_log_reg = function(x, alpha, n, psi, h, eps){
   
   m = length(x)
-  y = hasting(x, n, psi, h)
+  y = hasting_iid(x, n, psi, h, eps)
   
   # calcul des probabilités p_j
   denom = function(sample, eta) {
@@ -570,7 +569,7 @@ pm_barre = function(u, theta){
 }
 
 m = 10000
-n = 100000
+n = 10000
 x = rnorm(m,2,4)
 psi = c(mean(x), sd(x))
 
@@ -579,15 +578,15 @@ print(alpha)
 ```
 
 ```{r rev_log_reg ex1}
-print(rev_log_reg(x, alpha, n, c(8,8), pm_barre))
+print(rev_log_reg(x, alpha, n, c(8,8), pm_barre, 2))
 ```
 
 ```{r rev_log_reg ex2}
-print(rev_log_reg(x, alpha, n, c(5,2), pm_barre))
+print(rev_log_reg(x, alpha, n, c(5,2), pm_barre, 2))
 ```
 
 ```{r rev_log_reg ex3}
-print(rev_log_reg(x, alpha, n, c(2,4), pm_barre))
+print(rev_log_reg(x, alpha, n, c(2,4), pm_barre, 2))
 ```
 
 
