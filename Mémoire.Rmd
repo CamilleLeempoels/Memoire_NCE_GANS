@@ -61,8 +61,40 @@ hasting = function(x, n, psi, h){
 }
 ```
 
+Ci-dessous une autre version qui génère un échantillon iid.
 
-Note : on peut très certainement écrire sous forme matricielle cette fonction pour une meilleure performance.
+\begin{table}[!h]
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Argument} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
+x & vecteur & rcauchy(100, 0, 1) &  notre échantillon de densité inconnue \\ \hline
+n & entier & 100 & taille de la simulation \\ \hline
+psi & vecteur & c(0,1) & paramètres de la fonction h \\ \hline
+h & fonction &  & fonction qui retourne $\overline{p_m}(.,\psi)$\\ \hline
+$\epsilon$ & Entier & 2 & pas de décorrélation $\overline{p_m}(.,\psi)$\\ \hline
+\end{tabular}
+\end{table}
+
+```{r hasting iid}
+hasting = function(x, n, psi, h){
+  y = c()
+  y = append(y, sample(sample(x, 1)))
+  for (i in 2:n){
+    y_ = rnorm(1, y[i-1], 1)
+    u = runif(1)
+    if ( u <= 
+         (h(y_,psi) * dnorm(y_, y[i-1], 1))
+         /(h(y[i-1],psi) * dnorm(y[i-1], y_, 1))
+    ){ 
+      y = append(y, y_)} 
+    else { 
+      y = append(y, y[i-1])
+    }
+  }
+  return (y)
+}
+```
+
 
 \subsection{MC MLE (Geyer)}
 
@@ -221,14 +253,14 @@ x = rnorm(m, 2, 4)
 size_theta = 3
 ```
 
-```{r}
+```{r mc_mle application}
 # METHODE MC MLE
 mc_mle(x, n, c(mean(x),sd(x)), pm_barre)
 ```
 
 Etudions l'impact de la dimension des échantillons sur la convergence des estimateurs.
 
-```{r eval=FALSE, include=FALSE}
+```{r csv mc mle, eval=FALSE, include=FALSE}
 #NE PAS FAIRE TOURNER CETTE CELLULE, HYPER LONG, IMPORTER LE CSV A LA PLACE
 
 df_mcmle = data.frame(matrix(ncol = 4, nrow = 0))
@@ -250,7 +282,7 @@ for (m in M){
 ```
 
 
-```{r include=FALSE}
+```{r processing csv mc mle, include=FALSE}
 df_mcmle <- read_csv("df_mcmle.csv")[,-1]
 
 df_mcmle$size_data = as.factor(df_mcmle$size_data)
@@ -258,13 +290,14 @@ df_mcmle$ratio_noise_data = as.factor(df_mcmle$ratio_noise_data)
 
 df_mcmle_filt = filter(df_mcmle, param_2 <= 6 & param_2 >= 0 & param_1 >= -2 & param_1 <= 6)
 ```
-```{r}
+
+```{r graph mc mle cv}
 ggplot(df_mcmle_filt, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point()
 ```
 
 Etudions l'impact du choix de $\psi$ sur la convergence des estimateurs.
 
-```{r}
+```{r csv mc mle psi}
 df_mcmle_psi = data.frame(matrix(ncol = 4, nrow = 0))
 colnames(df_mcmle_psi) = c("param_1", "param_2", "psi_1", "psi_2")
 
@@ -279,19 +312,19 @@ for (k in psi_1){
 
 ```
 
-```{r}
+```{r graph mc mle psi}
 df_mcmle_psi$psi_1 = as.factor(df_mcmle_psi$psi_1)
 df_mcmle_psi = filter(df_mcmle_psi, param_1 <= 3)
 ggplot(df_mcmle_psi, aes(x = param_1, y = param_2, color = psi_1)) + geom_point()
 ```
 
 
-```{r}
+```{r nce application}
 # METHODE NCE
 nce(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n)
 ```
 
-```{r eval=FALSE, include=FALSE}
+```{r csv nce, eval=FALSE, include=FALSE}
 #NE PAS FAIRE TOURNER CETTE CELLULE, HYPER LONG, IMPORTER LE CSV A LA PLACE
 
 df_nce = data.frame(matrix(ncol = 5, nrow = 0))
@@ -316,7 +349,7 @@ df_nce$size_data = as.factor(df_nce$size_data)
 df_nce$ratio_noise_data = as.factor(df_nce$ratio_noise_data)
 ```
 
-```{r include=FALSE}
+```{r process csv nce, include=FALSE}
 df_nce <- read_csv("df_nce.csv")[,-1]
 
 df_nce$size_data = as.factor(df_nce$size_data)
@@ -326,11 +359,11 @@ df_nce$const_error = abs(df_nce$const - 4*sqrt(2*pi))
 ```
 
 
-```{r}
+```{r graph nce params}
 ggplot(df_nce, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point()
 ```
 
-```{r}
+```{r graph nce const}
 ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + geom_boxplot()
 ```
 
@@ -393,7 +426,7 @@ bootstrap = function(matrix, alpha){
 ```{r test_NCE_bootstrap}
 x_test = rnorm(1000,2,4)
 
-matrix_theta_bootstrap = NCE_bootstrap(x_test, rcauchy, c(mean(x_test),sd(x_test)), log_pm, log_pn_cauchy, 3, 1000, 1000, c("mu", "sigma", "exp(-c)"))
+matrix_theta_bootstrap = NCE_bootstrap(x_test, rcauchy, c(mean(x_test),sd(x_test)), log_pm, log_pn_cauchy, 3, 1000, 10, c("mu", "sigma", "exp(-c)"))
 
 kable(bootstrap(matrix_theta_bootstrap, 0.05))
 ```
@@ -430,10 +463,11 @@ for (i in 1:100) {
 }
 ```
 
-```{r}
+```{r graph point mc mle recur}
 ggplot(PSI, aes(x = param_1, y = param_2, color = iteration)) + geom_point()
 ```
-```{r}
+
+```{r graph lines mc mle recur}
 PSI_melted = melt(PSI, id.vars = "iteration")
 ggplot(PSI_melted, aes(x = iteration, y = value)) + geom_line(aes(color = variable, group = variable)) 
 ```
@@ -486,45 +520,6 @@ mc_mle_recursif_3(x, n, psi, pm_barre, 10)
 ```
 
 
-```{r nce_recursif}
-nce_recursif = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size_of_loop){
-  
-  y = do.call(law_y, c(list(n),params_y))
-  
-  m = length(x)
-  
-  for (i in 1:size_of_loop){
-  
-    h = function(u, theta){
-      return( 1 / (1 + n/m * exp(log_pn(u) - log_pm(u, theta))))
-    }
-    
-    J = function(theta){
-      return( sum(log(h(x, theta))) + sum(log(1 - h(y, theta))) )
-    }
-    
-    theta = optim(
-      par = rep(1, size_theta),
-      gr = "CG",
-      control = list(fnscale=-1),
-      fn = J
-    )$par
-    
-    print(theta)
-    
-    y = do.call(law_y, c(list(n),theta[-size_theta]))
-    
-  }
-  
-  return(c(theta[-size_theta], exp(-theta[size_theta])))
-}
-```
-
-```{r test_nce_recursif}
-nce_recursif(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n, 10)
-```
-
-
 \subsection{Reverse logistic regression}
 
 La maximisation de la fonction objectif $$l_n(\eta) = \sum_{j=1}^m \sum_{i=1}^{n_j} log(p_j(X_{i,j}, \eta))$$ permet d'estimer les $\eta$ (qui sont fonction des constantes de normalisation des $h_j$). On utilise les notations suivantes :
@@ -533,7 +528,7 @@ $$\eta_j = -log(Z_j) + log(\frac{n_j}{n}) ~\mbox{ avec } Z_j \mbox{ la constante
 $$p_j(x) = \frac{h_j(x)e^{\eta_j}}{\sum_{k=1}^m h_k(x)e^{\eta_k}}$$
 Exemple avec $m=2$, $n = n_1 + n_2 = 1000 + 1000$, et pour coller avec les méthodes différentes on va prendre $h_1$ la densité non normalisée d'une $\mathscr{N}(\alpha)$ dont on a estimé $\alpha$ par MC MLE et $h_2$ la densité non normalisée d'une $\mathscr{N}(\psi)$ avec $\psi$ qu'on choisit. 
 
-```{r}
+```{r rev_log_reg}
 rev_log_reg = function(x, alpha, n, psi, h){
   
   m = length(x)
@@ -569,17 +564,30 @@ rev_log_reg = function(x, alpha, n, psi, h){
 }
 ```
 
-```{r}
+```{r rev_log_reg init}
 pm_barre = function(u, theta){
   return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
 }
 
 m = 10000
-n = 10000
+n = 100000
 x = rnorm(m,2,4)
+psi = c(mean(x), sd(x))
 
-print(rev_log_reg(x, c(2,4), n, c(2,4), pm_barre))
+alpha = mc_mle(x, n, psi, pm_barre)
+print(alpha)
 ```
 
+```{r rev_log_reg ex1}
+print(rev_log_reg(x, alpha, n, c(8,8), pm_barre))
+```
+
+```{r rev_log_reg ex2}
+print(rev_log_reg(x, alpha, n, c(5,2), pm_barre))
+```
+
+```{r rev_log_reg ex3}
+print(rev_log_reg(x, alpha, n, c(2,4), pm_barre))
+```
 
 
