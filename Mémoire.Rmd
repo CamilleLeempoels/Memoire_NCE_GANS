@@ -534,32 +534,52 @@ $$p_j(x) = \frac{h_j(x)e^{\eta_j}}{\sum_{k=1}^m h_k(x)e^{\eta_k}}$$
 Exemple avec $m=2$, $n = n_1 + n_2 = 1000 + 1000$, et pour coller avec les méthodes différentes on va prendre $h_1$ la densité non normalisée d'une $\mathscr{N}(\alpha)$ dont on a estimé $\alpha$ par MC MLE et $h_2$ la densité non normalisée d'une $\mathscr{N}(\psi)$ avec $\psi$ qu'on choisit. 
 
 ```{r}
+rev_log_reg = function(x, alpha, n, psi, h){
+  
+  m = length(x)
+  y = hasting(x, n, psi, h)
+  
+  # calcul des probabilités p_j
+  denom = function(sample, eta) {
+    return(pm_barre(sample, alpha)*exp(eta[1]) + pm_barre(sample,psi)*exp(eta[2]))}
+  p_1 = function(sample, eta){
+    return (pm_barre(sample, alpha)*exp(eta[1]) / denom(sample, eta))}
+  p_2 = function(sample, eta){
+    return (pm_barre(sample, psi)*exp(eta[2]) / denom(sample, eta))}
+  
+  # fonction objectif
+  L = function(eta) {
+    return(sum(log(p_1(x, eta))) + sum(log(p_2(y, eta))))}
+  
+  # initialisation descente de gradient
+  eta1 = -log(sd(x)*sqrt(2*pi)) + log(m/(m+n))
+  eta2 = -log(sd(y)*sqrt(2*pi)) + log(n/(m+n))
+  
+  # optimisation
+  const = optim(
+    par = c(eta1,eta2),
+    gr = "CG",
+    control = list(fnscale=-1),
+    fn = L
+  )$par
+  
+  a = exp(-const[1] + log(m/(m+n)))
+  b = exp(-const[2] + log(n/(m+n)))
+  return(c(a,b))
+}
+```
 
+```{r}
 pm_barre = function(u, theta){
   return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
 }
 
-x_test = rnorm(100000, 2, 4)
-y_test = rnorm(100000, 2, 4)
-  
-f_test = function(eta) {
-  alpha = c(2,4)
-  psi = c(2,4)
-  n1 = length(x_test)
-  n2 = length(y_test)
-  return(
-    sum(log(pm_barre(x_test, alpha)*exp(eta[1]) / (pm_barre(x_test, alpha)*exp(eta[1]) + pm_barre(x_test, psi)*exp(eta[2]))))
-    +
-    sum(log(pm_barre(y_test, psi)*exp(eta[2]) / (pm_barre(y_test, psi)*exp(eta[2]) + pm_barre(y_test, alpha)*exp(eta[1]))))
-    )
-}
+m = 10000
+n = 10000
+x = rnorm(m,2,4)
 
-  
-const_test = optim(
-    par = c(0,0),
-    gr = "CG",
-    control = list(fnscale=-1),
-    fn = f_test
-  )$par
-print(exp(-const_test + log(0.5)))
+print(rev_log_reg(x, c(2,4), n, c(2,4), pm_barre))
 ```
+
+
+
