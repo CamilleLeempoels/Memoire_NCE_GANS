@@ -641,7 +641,7 @@ df_rev_log_reg_param <- read_csv("df_rev_log_reg_param.csv", show_col_types = FA
 df_rev_log_reg_param$ratio_alpha_psi = as.factor(df_rev_log_reg_param$ratio_alpha_psi)
 ggplot(df_rev_log_reg_param, aes(x=ratio_alpha_psi, y = const_error, group = ratio_alpha_psi, color = ratio_alpha_psi)) + geom_boxplot()
 ```
-```{r}
+```{r eval=FALSE, include=FALSE}
 df_rev_log_reg2 = data.frame(matrix(ncol = 4, nrow = 0))
 colnames(df_rev_log_reg2) = c("const", "size_data", "ratio_noise_data", "ratio_alpha_psi")
 
