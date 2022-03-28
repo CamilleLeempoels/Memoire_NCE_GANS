@@ -24,6 +24,9 @@ library(matrixStats)
 library(knitr)
 library(dplyr)
 library(tidyverse)
+library(moments) 
+library(tseries)
+library(ggpubr)
 ```
 
 \subsection{Algorithme d'Hasting}
@@ -75,7 +78,7 @@ $\epsilon$ & Entier & 2 & pas de décorrélation $\overline{p_m}(.,\psi)$\\ \hli
 \end{tabular}
 \end{table}
 
-```{r hasting iid }
+```{r hasting iid}
 hasting_iid = function(x, n, psi, h, eps){
   y = c()
   y = append(y, sample(x, 1))
@@ -280,7 +283,6 @@ for (m in M){
 }
 ```
 
-
 ```{r processing csv mc mle, include=FALSE}
 df_mcmle <- read_csv("df_mcmle.csv")[,-1]
 
@@ -343,9 +345,6 @@ for (m in M){
   }
 }
 write.csv(df_nce, "df_nce.csv")
-
-df_nce$size_data = as.factor(df_nce$size_data)
-df_nce$ratio_noise_data = as.factor(df_nce$ratio_noise_data)
 ```
 
 ```{r process csv nce, include=FALSE}
@@ -470,7 +469,9 @@ ggplot(PSI, aes(x = param_1, y = param_2, color = iteration)) + geom_point()
 PSI_melted = melt(PSI, id.vars = "iteration")
 ggplot(PSI_melted, aes(x = iteration, y = value)) + geom_line(aes(color = variable, group = variable)) 
 ```
-Cette approche n'améliore pas la précision de notre estimation.
+Cette approche naïve n'améliore pas la précision de notre estimation. 
+
+Nouvelle approche à venir.
 
 
 ```{r mc_mle_recursif_3, eval=FALSE, include=FALSE}
@@ -518,6 +519,44 @@ mc_mle_recursif_3 = function(x, n, psi, h, size_of_loop){
 mc_mle_recursif_3(x, n, psi, pm_barre, 10)
 ```
 
+\subsection{Hasting iid}
+
+Afin de pouvoir appliquer numériquement la méthode de Reverse logistic regression, on aurait besoin de savoir simuler un échantillon iid suivant une loi dont on ne connait pas la constante de normalisation. L'idée est d'utiliser l'algorithme d'Hasting et de ne conserver qu'un échantillon tous les $\epsilon$ pas. Le code est en haut de ce document. \\
+
+Etude de l'impact du choix du pas.
+
+```{r}
+df_hasting_iid = data.frame(matrix(ncol=7, nrow=0))
+colnames(df_hasting_iid) = c("epsilon", "mean", "sd", "skew", "kurtosis", "time", "mean_autocor")
+init = rnorm(1, 0, 1)
+n = 10000
+
+for (eps in 1:10){
+  t1<-Sys.time()
+  y = hasting_iid(init, n, c(0,1), pm_barre, eps)
+  t2<-Sys.time()
+  t = difftime(t2, t1)
+  df_hasting_iid[nrow(df_hasting_iid) + 1, ] = c(eps, mean(y), sd(y), skewness(y), kurtosis(y), t, mean(acf(y, plot = FALSE)$acf))
+}
+
+df_hasting_iid$mean = abs(df_hasting_iid$mean)
+df_hasting_iid$sd = abs(df_hasting_iid$sd - 1)
+df_hasting_iid$skew = abs(df_hasting_iid$skew)
+df_hasting_iid$kurtosis = abs(df_hasting_iid$kurtosis - 3)
+```
+
+```{r}
+df_hasting_iid_melted = melt(df_hasting_iid[,-6], id.vars = "epsilon")
+```
+
+```{r}
+graph1 = ggplot(df_hasting_iid_melted, aes(x = epsilon, y = value)) + geom_line(aes(color = variable, group = variable))
+
+graph2 = ggplot(df_hasting_iid, aes(x = epsilon, y = time)) + geom_line()
+
+ggarrange(graph1, graph2, ncol = 1, nrow = 2)
+```
+$\epsilon = 2$ semble être un bon choix au regard du gain en terme d'auto-corrélation et du temps de calcul.
 
 \subsection{Reverse logistic regression}
 
@@ -558,8 +597,7 @@ rev_log_reg = function(x, alpha, n, psi, h, eps){
   )$par
   
   a = exp(-const[1] + log(m/(m+n)))
-  b = exp(-const[2] + log(n/(m+n)))
-  return(c(a,b))
+  return(a)
 }
 ```
 
@@ -581,12 +619,65 @@ print(alpha)
 print(rev_log_reg(x, alpha, n, c(8,8), pm_barre, 2))
 ```
 
-```{r rev_log_reg ex2}
-print(rev_log_reg(x, alpha, n, c(5,2), pm_barre, 2))
+Etude de l'impact de la dimension, du ratio et des paramètres sur la convergence de la constante.
+
+```{r eval=FALSE, include=FALSE}
+df_rev_log_reg_param = data.frame(matrix(ncol = 2, nrow = 0))
+colnames(df_rev_log_reg_param) = c("const", "ratio_alpha_psi")
+
+alpha = c(2,4)
+
+for (r in 1:4) {
+  for (i in 1:50) {
+     df_rev_log_reg_param[nrow(df_rev_log_reg_param) + 1, ] = c(rev_log_reg(x, alpha, 10000, alpha*r, pm_barre, 2), r)
+  }
+}
+df_rev_log_reg_param$const_error = abs(df_rev_log_reg_param$const - 4*sqrt(2*pi))
+write.csv(df_rev_log_reg_param, "df_rev_log_reg_param.csv")
 ```
 
-```{r rev_log_reg ex3}
-print(rev_log_reg(x, alpha, n, c(2,4), pm_barre, 2))
+```{r}
+df_rev_log_reg_param <- read_csv("df_rev_log_reg_param.csv", show_col_types = FALSE)[,-1]
+df_rev_log_reg_param$ratio_alpha_psi = as.factor(df_rev_log_reg_param$ratio_alpha_psi)
+ggplot(df_rev_log_reg_param, aes(x=ratio_alpha_psi, y = const_error, group = ratio_alpha_psi, color = ratio_alpha_psi)) + geom_boxplot()
+```
+```{r}
+df_rev_log_reg2 = data.frame(matrix(ncol = 4, nrow = 0))
+colnames(df_rev_log_reg2) = c("const", "size_data", "ratio_noise_data", "ratio_alpha_psi")
+
+M = c(1000, 10000)
+N = c(1, 10)
+alpha = c(2,4)
+
+for (m in M){
+  x = rnorm(m, 2, 4)
+  for (n in N) {
+    for (r in 1:4) {
+      for (i in 1:15) {
+         df_rev_log_reg2[nrow(df_rev_log_reg2) + 1, ] = c(rev_log_reg(x, alpha, n*m, alpha*r, pm_barre, 2), m, n, r)
+      }
+    }
+  }
+}
+
+write.csv(df_rev_log_reg2, "df_rev_log_reg2.csv")
 ```
 
+```{r}
+df_test = aggregate(const ~ size_data + ratio_noise_data + ratio_alpha_psi,
+                    data = df_rev_log_reg,
+                    FUN = mean)
+df_test$ratio_alpha_psi = as.numeric(df_test$ratio_alpha_psi)
+df_test$ratio_noise_data = as.factor(df_test$ratio_noise_data)
+df_test$size_data = as.factor(df_test$size_data)
+df_test$const_error = abs(df_test$const - 4*sqrt(2*pi))
+```
+
+```{r}
+ggplot(df_test, aes(x = ratio_alpha_psi, y = const_error, color = size_data, shape = ratio_noise_data)) + geom_line() + geom_poinUUt()
+```
+
+```{r}
+write.csv(df_rev_log_reg, "df_rev_log_reg.csv")
+```
 
