@@ -365,6 +365,84 @@ ggplot(df_nce, aes(x = param_1, y = param_2, color = size_data, shape = ratio_no
 ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + geom_boxplot()
 ```
 
+\subsection{Modèle d'Ising}
+
+```{r}
+library('isingLenzMC')
+
+beta    = 0.9             # paramètre de temperature 
+n       = 15              # nombre de sites
+config1 = rep(1,n)        # generer une configuration à n sites
+config  = genConfig1D(n)  # generer une configuration à n sites aléatoirement
+
+energie = c()
+iter = 100000
+data = matrix(nrow= iter, ncol = n)
+
+for (k in 1:iter){
+  # on tire successivement des configurations jusqu'à obtenir convergence du niveau d'énergie
+  #ce que l'on observera graphiquement
+  config = isStep1D(beta, config, 1.0, 0.0, 1)$vec # tirage avec Metropolis
+  data[k,] = etat 
+  energie   = c(energie,lattice1DenergyNN(config))
+}
+plot(energie, type ='l')
+```
+
+On définit la fonction \textit{coeur} qui est à une constante de normalisation près la mesure de Gibbs associée à au modèle d'Ising de paramètre \Beta.
+On définit la fonction \textit{ising1D(n)} qui est rend toutes les configurations de spins possibles d'un modèle d'Ising unidimensionnel à $n$ sites. 
+
+```{r}
+coeur = function(constante_normalisation,beta=0.9,config){
+  
+  # constante_normalisation :  fonction de partition inconnue
+  # beta                    :  paramètre de température 
+  # config                  :  une configuration de spins
+  
+  # Lorsque 'constante_normalisation' == vraie valeur de la fonction de partition pour le paramètre beta 
+  #       alors return la probabilité de la configuration de spins 'config'
+  
+  return ( exp(-beta*lattice1DenergyNN(config))/constante_normalisation )
+}
+  
+ising1D = function(n){
+
+  # n : nombre de sites pour une configuration
+  
+  # return l'ensemble des configuration 1D possibles dans une matrice
+  # chaque ligne correspond à une configuration possible
+  
+  if (n==1)
+    {
+    return(matrix(c(1,-1),nrow=2))
+    }
+  else
+    {
+    return(cbind( rbind(ising1D(n-1),ising1D(n-1)), c(rep(1,2**(n-1)),rep(-1,2**(n-1)))  ))
+    }
+}
+
+```
+
+```{r}
+# un petit test de ce qu'on fait
+
+n       = 15   # nombre de sites 
+config  = ising(n) # ensemble des configurations 1D à n sites
+beta    = 0.9  # paramètre de température
+energie = c()
+
+for (k in 1:2**n){ energie = c(energie,totalEnergy1D(config[k,], 1, 0)) } # totalEnergy1D(config[k,], 1, 0), 1 interraction voisins, 0 champs ext
+
+cst_normalisation  = sum(exp(-beta*energie))
+
+proba  = 0
+for (k in 1:2**n){ proba = proba + coeur(cst_normalisation,config[k,]) } 
+(proba)
+```
+
+
+
 \newpage
 \section{Nouvelles approches}
 \subsection{Bootstrap}
