@@ -439,8 +439,73 @@ cst_normalisation  = sum(exp(-beta*energie))
 proba  = 0
 for (k in 1:2**n){ proba = proba + coeur(cst_normalisation,config[k,]) } 
 (proba)
+print("it looks good")
 ```
+Il se peut qu'il y ait conflit de notations pour cette sous section d'Ising avec les notations du précédent exemple.
+De plus, il y'a une erreur en sortie que je n'arrive pas résoudre pour l'instant. Mais je ne pense pas qu'elle soit très compliquée...
+```{r}
+log_pn = function(u,param_pn){
+  # pn densite iid N(param_pn[1],param_pn[2]) de taille length(u) 
+  # Verifier que c'est bien ce qui est codé
+  n     = length(u)
+  log_d = 0
+  for (k in 1:n){ log_d = log_d - 0.5 * ((u[k] - param_pn[1]) / param_pn[2]) ** 2 }
+  return(-0.5*n*log(2*pi*(param_pn[2]**2)) + log_d)
+}
 
+log_pm = function(configuration,beta,theta){
+  # theta = -log(Z)
+  # interraction entre sites = 1 et avec le champs extérieure = 0
+  return ( -beta*totalEnergy1D(configuration,1,0) + theta )
+}
+
+
+nce_ising = function(matrix_ising,beta,log_pm,theta,law_pn,param_pn,log_pn,b_size){
+  # matrix_ising = matrice ou en ligne sont rangées les observations d'Ising en 1D
+  # beta         = paramètre de température de modèle d'Ising \in ]0,1[
+  # log_pm       = logarithme de la densité d'Ising
+  # theta        = paramètre à optimiser , en lien avec la constante de normalisation
+  
+  # law_pn   = loi du bruit qui doit contenir dans son support {0,1}
+  # param_pn = paramètres de la loi law_pn
+  # log_pn   = log de la densité de pn
+  
+  # b_size  = nombre d'observation du bruit, à ne pas confondre avec la taille d'une observation du bruit qui est fixée à n
+  
+  n     = dim(matrix_ising)[2] # n = nombre de sites pour les observations d'Ising en 1D
+  m     = dim(matrix_ising)[1] # m = nombre d'observations d'Ising en 1D
+  
+  bruit = matrix(do.call(law_pn,c(list(b_size*n),param_pn)),ncol=n) # échantillon de vecteurs de bruit disposé en matrice, ligne par ligne
+  
+  h = function(configuration,theta){return( 1 / (1 + b_size/m * exp(log_pn(configuration,param_pn) - log_pm(configuration,beta,theta))))}
+  
+  J = function(theta){
+    # x vecteur de densite inconnue 
+    # y vecyeur de bruit 
+    objectif = 0
+    for (k in 1:m){objectif = objectif + log(h(matrix_ising[k,],theta)) }   # composante de l'objectif liée aux données
+    for (k in 1:b_size){objectif = objectif + log(1 - h(bruit[k,],theta)) } # composante de l'objectif liée au bruit
+    return( objectif )
+    }
+  
+  solution = optimize(f = J,
+                      interval = c(-1e5,1e5),
+                      maximum  = FALSE)
+  
+  return(exp(-solution))
+}
+
+
+n            = 10
+matrix_ising = ising1D(n)[100:900,]
+beta         = 0.9
+theta        = 1
+law_pn       = rnorm
+param_pn     = c(0,1)
+b_size       = 2**n
+
+nce_ising(matrix_ising,beta,log_pm,theta,law_pn,param_pn,log_pn,b_size)
+```
 
 
 \newpage
