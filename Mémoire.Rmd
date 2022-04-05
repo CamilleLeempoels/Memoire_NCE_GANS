@@ -578,18 +578,18 @@ kable(bootstrap(matrix_theta_bootstrap, 0.05))
 
 Utilité : améliorer récursivement la précision de l'estimation via les estimations précédentes
 
-```{r mc_mle_recursif}
+```{r mc_mle_recursif, eval=FALSE, include=FALSE}
 m = 10000
 n = 10000
 x = rnorm(m, 2, 4)
 psi = c(mean(x),sd(x))
 
-PSI = data.frame(matrix(ncol = 3, nrow = 0))
-colnames(PSI) = c("iteration", "param_1", "param_2")
+df_recurs_naif = data.frame(matrix(ncol = 3, nrow = 0))
+colnames(df_recurs_naif) = c("iteration", "param_1", "param_2")
 
 for (i in 1:100) {
   y = hasting(x, n, psi, pm_barre)
-  PSI[nrow(PSI) + 1, ] = c(i, psi)
+  df_recurs_naif[nrow(df_recurs_naif) + 1, ] = c(i, psi)
 
   L = function(theta){
     return(sum(log(pm_barre(x,theta)/pm_barre(x,psi))) - m*log(mean(pm_barre(y,theta)/pm_barre(y,psi))))
@@ -602,15 +602,19 @@ for (i in 1:100) {
     fn = L
   )$par
 }
+
+write.csv(df_recurs_naif, "df_recurs_naif.csv")
 ```
 
 ```{r graph point mc mle recur}
-ggplot(PSI, aes(x = param_1, y = param_2, color = iteration)) + geom_point()
+df_recurs_naif <- read_csv("df_recurs_naif.csv")[,-1]
+ggplot(df_recurs_naif, aes(x = param_1, y = param_2, color = iteration)) + geom_point()
 ```
 
 ```{r graph lines mc mle recur}
-PSI_melted = melt(PSI, id.vars = "iteration")
-ggplot(PSI_melted, aes(x = iteration, y = value)) + geom_line(aes(color = variable, group = variable)) 
+df_recurs_naif <- read_csv("df_recurs_naif.csv")[,-1]
+df_recurs_naif_melted = melt(df_recurs_naif, id.vars = "iteration")
+ggplot(df_recurs_naif_melted, aes(x = iteration, y = value)) + geom_line(aes(color = variable, group = variable)) 
 ```
 Cette approche naïve n'améliore pas la précision de notre estimation. 
 
@@ -668,28 +672,50 @@ Afin de pouvoir appliquer numériquement la méthode de Reverse logistic regress
 
 Etude de l'impact du choix du pas.
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 df_hasting_iid = data.frame(matrix(ncol=7, nrow=0))
 colnames(df_hasting_iid) = c("epsilon", "mean", "sd", "skew", "kurtosis", "time", "mean_autocor")
 init = rnorm(1, 0, 1)
 n = 10000
 
 for (eps in 1:10){
-  t1<-Sys.time()
-  y = hasting_iid(init, n, c(0,1), pm_barre, eps)
-  t2<-Sys.time()
-  t = difftime(t2, t1)
-  df_hasting_iid[nrow(df_hasting_iid) + 1, ] = c(eps, mean(y), sd(y), skewness(y), kurtosis(y), t, mean(acf(y, plot = FALSE)$acf))
+  for (i in 1:20) 
+  { 
+    t1<-Sys.time()
+    y = hasting_iid(init, n, c(0,1), pm_barre, eps)
+    t2<-Sys.time()
+    t = difftime(t2, t1)
+    df_hasting_iid[nrow(df_hasting_iid) + 1, ] = c(eps, mean(y), sd(y), skewness(y), kurtosis(y), t, mean(acf(y, plot = FALSE)$acf))
+  }
 }
 
 df_hasting_iid$mean = abs(df_hasting_iid$mean)
 df_hasting_iid$sd = abs(df_hasting_iid$sd - 1)
 df_hasting_iid$skew = abs(df_hasting_iid$skew)
 df_hasting_iid$kurtosis = abs(df_hasting_iid$kurtosis - 3)
+
+write.csv(df_hasting_iid, "df_hasting_iid.csv")
 ```
 
-```{r}
-df_hasting_iid_melted = melt(df_hasting_iid[,-6], id.vars = "epsilon")
+```{r include=FALSE}
+df_hasting_iid <- read_csv("df_hasting_iid.csv")[,-1]
+
+df_hasting_iid_agg = aggregate(
+  cbind(
+    df_hasting_iid$mean, 
+    df_hasting_iid$sd,
+    df_hasting_iid$skew,
+    df_hasting_iid$kurtosis,
+    df_hasting_iid$time,
+    df_hasting_iid$mean_autocor
+  ),
+  list(df_hasting_iid$epsilon),
+  mean
+)
+
+colnames(df_hasting_iid_agg) = c("epsilon", "mean", "sd", "skew", "kurtosis", "time", "mean_autocor")
+
+df_hasting_iid_melted = melt(df_hasting_iid_agg[,-6], id.vars = "epsilon")
 ```
 
 ```{r}
@@ -701,7 +727,7 @@ ggarrange(graph1, graph2, ncol = 1, nrow = 2)
 ```
 $\epsilon = 2$ semble être un bon choix au regard du gain en terme d'auto-corrélation et du temps de calcul.
 
-\subsection{Reverse logistic regression}
+\subsection{Reverse logistic regression : deux lois de même famille}
 
 La maximisation de la fonction objectif $$l_n(\eta) = \sum_{j=1}^m \sum_{i=1}^{n_j} log(p_j(X_{i,j}, \eta))$$ permet d'estimer les $\eta$ (qui sont fonction des constantes de normalisation des $h_j$). On utilise les notations suivantes :
 
@@ -765,26 +791,6 @@ print(rev_log_reg(x, alpha, n, c(8,8), pm_barre, 2))
 Etude de l'impact de la dimension, du ratio et des paramètres sur la convergence de la constante.
 
 ```{r eval=FALSE, include=FALSE}
-df_rev_log_reg_param = data.frame(matrix(ncol = 2, nrow = 0))
-colnames(df_rev_log_reg_param) = c("const", "ratio_alpha_psi")
-
-alpha = c(2,4)
-
-for (r in 1:4) {
-  for (i in 1:50) {
-     df_rev_log_reg_param[nrow(df_rev_log_reg_param) + 1, ] = c(rev_log_reg(x, alpha, 10000, alpha*r, pm_barre, 2), r)
-  }
-}
-df_rev_log_reg_param$const_error = abs(df_rev_log_reg_param$const - 4*sqrt(2*pi))
-write.csv(df_rev_log_reg_param, "df_rev_log_reg_param.csv")
-```
-
-```{r}
-df_rev_log_reg_param <- read_csv("df_rev_log_reg_param.csv", show_col_types = FALSE)[,-1]
-df_rev_log_reg_param$ratio_alpha_psi = as.factor(df_rev_log_reg_param$ratio_alpha_psi)
-ggplot(df_rev_log_reg_param, aes(x=ratio_alpha_psi, y = const_error, group = ratio_alpha_psi, color = ratio_alpha_psi)) + geom_boxplot()
-```
-```{r eval=FALSE, include=FALSE}
 df_rev_log_reg2 = data.frame(matrix(ncol = 4, nrow = 0))
 colnames(df_rev_log_reg2) = c("const", "size_data", "ratio_noise_data", "ratio_alpha_psi")
 
@@ -803,24 +809,81 @@ for (m in M){
   }
 }
 
-write.csv(df_rev_log_reg2, "df_rev_log_reg2.csv")
+write.csv(df_rev_log_reg, "df_rev_log_reg.csv")
 ```
 
 ```{r}
-df_test = aggregate(const ~ size_data + ratio_noise_data + ratio_alpha_psi,
+df_rev_log_reg <- read_csv("df_rev_log_reg.csv")[,-1]
+
+df_rev_log_reg_agg = aggregate(const ~ size_data + ratio_noise_data + ratio_alpha_psi,
                     data = df_rev_log_reg,
                     FUN = mean)
-df_test$ratio_alpha_psi = as.numeric(df_test$ratio_alpha_psi)
-df_test$ratio_noise_data = as.factor(df_test$ratio_noise_data)
-df_test$size_data = as.factor(df_test$size_data)
-df_test$const_error = abs(df_test$const - 4*sqrt(2*pi))
+df_rev_log_reg_agg$ratio_alpha_psi = as.numeric(df_rev_log_reg_agg$ratio_alpha_psi)
+df_rev_log_reg_agg$ratio_noise_data = as.factor(df_rev_log_reg_agg$ratio_noise_data)
+df_rev_log_reg_agg$size_data = as.factor(df_rev_log_reg_agg$size_data)
+df_rev_log_reg_agg$const_error = abs(df_rev_log_reg_agg$const - 4*sqrt(2*pi))
 ```
 
 ```{r}
-ggplot(df_test, aes(x = ratio_alpha_psi, y = const_error, color = size_data, shape = ratio_noise_data)) + geom_line() + geom_poinUUt()
+ggplot(df_rev_log_reg_agg, aes(x = ratio_alpha_psi, y = const_error, color = size_data, shape = ratio_noise_data)) + geom_line() + geom_point()
 ```
 
+
+\subsection{Reverse logistic regression : deux lois de familles différentes}
+
+On reprend les notations ci-dessus (notations du papier). Exemple avec $m=2$, $n = n_1 + n_2$, et pour coller avec les méthodes différentes on va prendre $h_1$ la densité non normalisée d'une $\mathscr{N}(\alpha)$ dont on a estimé $\alpha$ par MC MLE et $h_2$ la densité d'une loi usuelle, on en connait donc la constante de normalisation. On note $\psi$ le paramètre de cette loi usuelle. 
 ```{r}
-write.csv(df_rev_log_reg, "df_rev_log_reg.csv")
+rev_log_reg_with_noise = function(x, law_noise, n, alpha, psi, h1, h2){
+  
+  y = do.call(law_noise, c(list(n),psi))
+  m = length(x)
+  
+  # calcul des probabilités p_j
+  denom = function(sample, eta) {
+    return(h1(sample, alpha)*exp(eta[1]) + h2(sample,psi[1],psi[2])*exp(eta[2]))}
+  p_1 = function(sample, eta){
+    return (h1(sample, alpha)*exp(eta[1]) / denom(sample, eta))}
+  p_2 = function(sample, eta){
+    return (h2(sample, psi[1],psi[2])*exp(eta[2]) / denom(sample, eta))}
+  
+  # fonction objectif
+  L = function(eta) {
+    return(sum(log(p_1(x, eta))) + sum(log(p_2(y, eta))))}
+  
+  # initialisation descente de gradient
+  eta1 = -log(sd(x)*sqrt(2*pi)) + log(m/(m+n))
+  eta2 = -log(sd(y)*sqrt(2*pi)) + log(n/(m+n))
+  
+  # optimisation
+  const = optim(
+    par = c(eta1,eta2),
+    gr = "CG",
+    control = list(fnscale=-1),
+    fn = L
+  )$par
+  
+  b = exp(-const[2] + log(m/(m+n)))
+  a = exp(-const[1] + log(m/(m+n)))
+  
+  # la constante de h_2 vaut normalement 1 si h_2 est une loi de densité, donc b est exactement le coefficent de proportionalité
+  return(a/b)
+}
+```
+
+```{r rev_log_reg init}
+pm_barre = function(u, theta){
+  return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
+}
+
+m = 1000
+n = 1000
+x = rnorm(m,2,4)
+psi = c(mean(x), sd(x))
+
+alpha = mc_mle(x, n, psi, pm_barre)
+print(alpha)
+```
+```{r}
+rev_log_reg_with_noise(x, rcauchy, n, c(2,4), c(mean(x),sd(x)), pm_barre, dcauchy)
 ```
 
