@@ -775,7 +775,7 @@ pm_barre = function(u, theta){
   return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
 }
 
-m = 10000
+m = 1000
 n = 10000
 x = rnorm(m,2,4)
 psi = c(mean(x), sd(x))
@@ -791,10 +791,10 @@ print(rev_log_reg(x, alpha, n, c(8,8), pm_barre, 2))
 Etude de l'impact de la dimension, du ratio et des paramètres sur la convergence de la constante.
 
 ```{r eval=FALSE, include=FALSE}
-df_rev_log_reg2 = data.frame(matrix(ncol = 4, nrow = 0))
-colnames(df_rev_log_reg2) = c("const", "size_data", "ratio_noise_data", "ratio_alpha_psi")
+df_rev_log_reg = data.frame(matrix(ncol = 4, nrow = 0))
+colnames(df_rev_log_reg) = c("const", "size_data", "ratio_noise_data", "ratio_alpha_psi")
 
-M = c(1000, 10000)
+M = c(1000, 5000, 10000, 15000)
 N = c(1, 10)
 alpha = c(2,4)
 
@@ -803,7 +803,7 @@ for (m in M){
   for (n in N) {
     for (r in 1:4) {
       for (i in 1:15) {
-         df_rev_log_reg2[nrow(df_rev_log_reg2) + 1, ] = c(rev_log_reg(x, alpha, n*m, alpha*r, pm_barre, 2), m, n, r)
+         df_rev_log_reg[nrow(df_rev_log_reg) + 1, ] = c(rev_log_reg(x, alpha, n*m, alpha*r, pm_barre, 2), m, n, r)
       }
     }
   }
@@ -818,14 +818,12 @@ df_rev_log_reg <- read_csv("df_rev_log_reg.csv")[,-1]
 df_rev_log_reg_agg = aggregate(const ~ size_data + ratio_noise_data + ratio_alpha_psi,
                     data = df_rev_log_reg,
                     FUN = mean)
-df_rev_log_reg_agg$ratio_alpha_psi = as.numeric(df_rev_log_reg_agg$ratio_alpha_psi)
+df_rev_log_reg_agg$ratio_alpha_psi = as.factor(df_rev_log_reg_agg$ratio_alpha_psi)
 df_rev_log_reg_agg$ratio_noise_data = as.factor(df_rev_log_reg_agg$ratio_noise_data)
-df_rev_log_reg_agg$size_data = as.factor(df_rev_log_reg_agg$size_data)
+df_rev_log_reg_agg$size_data = as.numeric(df_rev_log_reg_agg$size_data)
 df_rev_log_reg_agg$const_error = abs(df_rev_log_reg_agg$const - 4*sqrt(2*pi))
-```
 
-```{r}
-ggplot(df_rev_log_reg_agg, aes(x = ratio_alpha_psi, y = const_error, color = size_data, shape = ratio_noise_data)) + geom_line() + geom_point()
+ggplot(df_rev_log_reg_agg, aes(x = size_data, y = const_error, color = ratio_alpha_psi, shape = ratio_noise_data)) + geom_line() + geom_point()
 ```
 
 
@@ -866,7 +864,7 @@ rev_log_reg_with_noise = function(x, law_noise, n, alpha, psi, h1, h2){
   a = exp(-const[1] + log(m/(m+n)))
   
   # la constante de h_2 vaut normalement 1 si h_2 est une loi de densité, donc b est exactement le coefficent de proportionalité
-  return(a/b)
+  return(a/b*m/n)
 }
 ```
 
@@ -876,7 +874,7 @@ pm_barre = function(u, theta){
 }
 
 m = 1000
-n = 1000
+n = 10000
 x = rnorm(m,2,4)
 psi = c(mean(x), sd(x))
 
@@ -885,5 +883,44 @@ print(alpha)
 ```
 ```{r}
 rev_log_reg_with_noise(x, rcauchy, n, c(2,4), c(mean(x),sd(x)), pm_barre, dcauchy)
+```
+
+```{r eval=FALSE, include=FALSE}
+df_rev_log_reg_noise = data.frame(matrix(ncol = 4, nrow = 0))
+colnames(df_rev_log_reg_noise) = c("const", "size_data", "ratio_noise_data", "law_noise")
+
+M = c(1000, 5000, 10000, 15000)
+N = c(1, 10)
+alpha = c(2,4)
+
+for (m in M){
+  x = rnorm(m, 2, 4)
+  for (n in N) {
+    for (i in 1:1000) {
+       df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, rcauchy, n*m, alpha, alpha, pm_barre, dcauchy), m, n, "cauchy")
+    }
+    for (i in 1:100) {
+       df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, rnorm, n*m, alpha, alpha, pm_barre, dnorm), m, n, "normale")
+    }
+    for (i in 1:100) {
+       df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, runif, n*m, alpha, c(min(x),max(x)), pm_barre, dunif), m, n, "unif")
+    }
+  }
+}
+
+write.csv(df_rev_log_reg_noise, "df_rev_log_reg_noise.csv")
+```
+
+```{r}
+df_rev_log_reg_noise <- read_csv("df_rev_log_reg_noise.csv")[,-1]
+
+df_rev_log_reg_agg = aggregate(const ~ size_data + ratio_noise_data + law_noise,
+                    data = df_rev_log_reg_noise,
+                    FUN = mean)
+df_rev_log_reg_agg$ratio_noise_data = as.factor(df_rev_log_reg_agg$ratio_noise_data)
+df_rev_log_reg_agg$size_data = as.numeric(df_rev_log_reg_agg$size_data)
+df_rev_log_reg_agg$const_error = abs(df_rev_log_reg_agg$const - 4*sqrt(2*pi))
+
+ggplot(df_rev_log_reg_agg, aes(x = size_data, y = const_error, color = law_noise, shape = ratio_noise_data)) + geom_line() + geom_point()
 ```
 
