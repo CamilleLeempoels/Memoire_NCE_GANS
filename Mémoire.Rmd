@@ -19,14 +19,12 @@ output:
 
 ```{r include=FALSE}
 library(ggplot2)
-library(reshape)
+library(reshape2)
 library(matrixStats)
 library(knitr)
-library(dplyr)
-library(tidyverse)
 library(moments) 
 library(tseries)
-library(ggpubr)
+library(readr)
 ```
 
 ```{r}
@@ -300,7 +298,7 @@ df_mcmle <- read_csv("df_mcmle.csv")[,-1]
 df_mcmle$size_data = as.factor(df_mcmle$size_data)
 df_mcmle$ratio_noise_data = as.factor(df_mcmle$ratio_noise_data)
 
-df_mcmle_filt = filter(df_mcmle, param_2 <= 6 & param_2 >= 0 & param_1 >= -2 & param_1 <= 6)
+df_mcmle_filt = subset(df_mcmle, param_2 <= 6 & param_2 >= 0 & param_1 >= -2 & param_1 <= 6)
 ```
 
 ```{r graph mc mle cv}
@@ -324,7 +322,7 @@ write.csv(df_mcmle_psi, "df_mcmle_psi.csv")
 ```
 
 
-```{r graph mc mle psi}
+```{r graph mc mle psi, message = FALSE}
 df_mcmle_psi <- read_csv("df_mcmle_psi.csv")[,-1]
 
 df_mcmle_psi = df_mcmle_psi[order(-df_mcmle_psi$ratio_alpha_psi),]
@@ -396,14 +394,14 @@ for (k in 1:iter){
   # on tire successivement des configurations jusqu'à obtenir convergence du niveau d'énergie
   #ce que l'on observera graphiquement
   config = isStep1D(beta, config, 1.0, 0.0, 1)$vec # tirage avec Metropolis
-  data[k,] = config1 
+  data[k,] = config
   energie   = c(energie,lattice1DenergyNN(config))
 }
 plot(energie, type ='l')
 ```
 
-On définit la fonction \textit{coeur} qui est à une constante de normalisation près la mesure de Gibbs associée à au modèle d'Ising de paramètre \Beta.
-On définit la fonction \textit{ising1D(n)} qui est rend toutes les configurations de spins possibles d'un modèle d'Ising unidimensionnel à $n$ sites. 
+On définit la fonction $coeur$ qui est à une constante de normalisation près la mesure de Gibbs associée à au modèle d'Ising de paramètre $\beta$.
+On définit la fonction $ising1D(n)$ qui est rend toutes les configurations de spins possibles d'un modèle d'Ising unidimensionnel à $n$ sites. 
 
 ```{r}
 coeur = function(constante_normalisation,beta=0.9,config){
@@ -437,7 +435,7 @@ ising1D = function(n){
 
 ```
 
-```{r}
+```{r eval=FALSE}
 # un petit test de ce qu'on fait
 
 n       = 15   # nombre de sites 
@@ -456,7 +454,7 @@ print("it looks good")
 ```
 Il se peut qu'il y ait conflit de notations pour cette sous section d'Ising avec les notations du précédent exemple.
 De plus, il y'a une erreur en sortie que je n'arrive pas résoudre pour l'instant. Mais je ne pense pas qu'elle soit très compliquée...
-```{r}
+```{r eval=FALSE}
 log_pn = function(u,param_pn){
   # pn densite iid N(param_pn[1],param_pn[2]) de taille length(u) 
   # Verifier que c'est bien ce qui est codé
@@ -619,13 +617,15 @@ for (i in 1:100) {
 write.csv(df_recurs_naif, "df_recurs_naif.csv")
 ```
 
-```{r graph point mc mle recur}
+```{r graph point mc mle recur, message = FALSE}
 df_recurs_naif <- read_csv("df_recurs_naif.csv")[,-1]
 ggplot(df_recurs_naif, aes(x = param_1, y = param_2, color = iteration)) + geom_point()
 ```
 
-```{r graph lines mc mle recur}
+```{r graph lines mc mle recur, message = FALSE}
 df_recurs_naif <- read_csv("df_recurs_naif.csv")[,-1]
+colnames(df_recurs_naif) = c("iteration", "param_1", "param_2")
+
 df_recurs_naif_melted = melt(df_recurs_naif, id.vars = "iteration")
 ggplot(df_recurs_naif_melted, aes(x = iteration, y = value)) + geom_line(aes(color = variable, group = variable)) + scale_color_manual(values = pal2)
 ```
@@ -681,7 +681,7 @@ mc_mle_recursif_3(x, n, psi, pm_barre, 10)
 
 \subsection{Hasting iid}
 
-Afin de pouvoir appliquer numériquement la méthode de Reverse logistic regression, on aurait besoin de savoir simuler un échantillon iid suivant une loi dont on ne connait pas la constante de normalisation. L'idée est d'utiliser l'algorithme d'Hasting et de ne conserver qu'un échantillon tous les $\epsilon$ pas. Le code est en haut de ce document. \\
+Afin de pouvoir appliquer numériquement la méthode de Reverse logistic regression, on aurait besoin de savoir simuler un échantillon iid suivant une loi dont on ne connait pas la constante de normalisation. L'idée est d'utiliser l'algorithme d'Hasting et de ne conserver qu'un échantillon tous les $\epsilon$ pas. Le code est en haut de ce document. 
 
 Etude de l'impact du choix du pas.
 
@@ -823,7 +823,7 @@ for (m in M){
 write.csv(df_rev_log_reg, "df_rev_log_reg.csv")
 ```
 
-```{r}
+```{r message=FALSE}
 df_rev_log_reg <- read_csv("df_rev_log_reg.csv")[,-1]
 
 df_rev_log_reg_agg = aggregate(const ~ size_data + ratio_noise_data + ratio_alpha_psi,
@@ -922,7 +922,7 @@ for (m in M){
 write.csv(df_rev_log_reg_noise, "df_rev_log_reg_noise.csv")
 ```
 
-```{r}
+```{r message = FALSE}
 df_rev_log_reg_noise <- read_csv("df_rev_log_reg_noise.csv")[,-1]
 
 df_rev_log_reg_agg = aggregate(const ~ size_data + ratio_noise_data + law_noise,
