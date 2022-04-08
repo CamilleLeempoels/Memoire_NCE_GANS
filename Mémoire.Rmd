@@ -396,11 +396,7 @@ for (k in 1:iter){
   #ce que l'on observera graphiquement
   config = isStep1D(beta, config, 1.0, 0.0, 1)$vec # tirage avec Metropolis
   data[k,] = config
-<<<<<<< Updated upstream
-  energie   = c(energie,lattice1DenergyNN(config))
-=======
   energie   = c(energie,totalEnergy1D(config,1.0,0.0))
->>>>>>> Stashed changes
 }
 plot(energie, type ='l')
 ```
@@ -445,11 +441,7 @@ ising1D = function(n){
 
 n       = 15   # nombre de sites 
 config  = ising1D(n) # ensemble des configurations 1D à n sites
-<<<<<<< Updated upstream
 beta    = 0.9 # paramètre de température
-=======
-beta    = 0.9  # paramètre de température
->>>>>>> Stashed changes
 energie = c()
 
 for (k in 1:2**n){ energie = c(energie,totalEnergy1D(c(config[k,]), 1, 0) ) } # totalEnergy1D(config[k,], 1, 0), 1 interraction voisins, 0 champs ext
@@ -459,7 +451,7 @@ cst_normalisation  = sum(exp(-beta*energie))
 proba  = 0
 for (k in 1:2**n){ proba = proba + coeur(cst_normalisation,beta=0.9,config[k,]) }
 (proba)
-print("it looks good")
+print("if proba = 1, then it is good")
 ```
 Il se peut qu'il y ait conflit de notations pour cette sous section d'Ising avec les notations du précédent exemple.
 De plus, il y'a une erreur en sortie que je n'arrive pas résoudre pour l'instant. Mais je ne pense pas qu'elle soit très compliquée...
