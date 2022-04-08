@@ -29,6 +29,17 @@ library(tseries)
 library(ggpubr)
 ```
 
+```{r}
+# Palettes
+
+pal5 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#E1AF00", "#DC863B")
+pal4 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#DC863B")
+pal2 = c("#3B9AB2", "#DC863B")
+pal3 = c("#3B9AB2", "#EBCC2A", "#DC863B")
+
+```
+
+
 \subsection{Algorithme d'Hasting}
 
 Utilité : simuler selon $p_m(.,\psi)$ pour un paramètre $\psi$ choisi. 
@@ -293,30 +304,33 @@ df_mcmle_filt = filter(df_mcmle, param_2 <= 6 & param_2 >= 0 & param_1 >= -2 & p
 ```
 
 ```{r graph mc mle cv}
-ggplot(df_mcmle_filt, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point()
+ggplot(df_mcmle_filt, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point() + scale_color_manual(values = pal2)
 ```
 
 Etudions l'impact du choix de $\psi$ sur la convergence des estimateurs.
 
-```{r csv mc mle psi}
-df_mcmle_psi = data.frame(matrix(ncol = 4, nrow = 0))
-colnames(df_mcmle_psi) = c("param_1", "param_2", "psi_1", "psi_2")
+```{r csv mc mle psi, eval=FALSE, include=FALSE}
+df_mcmle_psi = data.frame(matrix(ncol = 3, nrow = 0))
+colnames(df_mcmle_psi) = c("param_1", "param_2", "ratio_alpha_psi")
 
-psi_1 = c(0, 2, 4, 6)
-
-x = rnorm(m, 2, 4)
-for (k in psi_1){
-  for (i in 1:5) {
-     df_mcmle_psi[nrow(df_mcmle_psi) + 1, ] = c(mc_mle(x, m*10, c(k, k+2), pm_barre), k, k+2)
+x = rnorm(10000, 2, 4)
+for (r in c(1,3,5,7)){
+  for (i in 1:100) {
+     df_mcmle_psi[nrow(df_mcmle_psi) + 1, ] = c(mc_mle(x, 10000, c(2*r, 4*r), pm_barre), r)
   }
 }
+write.csv(df_mcmle_psi, "df_mcmle_psi.csv")
 
 ```
 
+
 ```{r graph mc mle psi}
-df_mcmle_psi$psi_1 = as.factor(df_mcmle_psi$psi_1)
-df_mcmle_psi = filter(df_mcmle_psi, param_1 <= 3)
-ggplot(df_mcmle_psi, aes(x = param_1, y = param_2, color = psi_1)) + geom_point()
+df_mcmle_psi <- read_csv("df_mcmle_psi.csv")[,-1]
+
+df_mcmle_psi = df_mcmle_psi[order(-df_mcmle_psi$ratio_alpha_psi),]
+
+df_mcmle_psi$ratio_alpha_psi = as.factor(df_mcmle_psi$ratio_alpha_psi)
+ggplot(df_mcmle_psi, aes(x = param_1, y = param_2, color = ratio_alpha_psi)) + geom_point() + scale_color_manual(values = pal5)
 ```
 
 
@@ -356,13 +370,12 @@ df_nce$ratio_noise_data = as.factor(df_nce$ratio_noise_data)
 df_nce$const_error = abs(df_nce$const - 4*sqrt(2*pi))
 ```
 
-
 ```{r graph nce params}
-ggplot(df_nce, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point()
+ggplot(df_nce, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point() + scale_color_manual(values = pal3)
 ```
 
 ```{r graph nce const}
-ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + geom_boxplot()
+ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + geom_boxplot() + scale_color_manual(values = pal2)
 ```
 
 \subsection{Modèle d'Ising}
@@ -383,7 +396,7 @@ for (k in 1:iter){
   # on tire successivement des configurations jusqu'à obtenir convergence du niveau d'énergie
   #ce que l'on observera graphiquement
   config = isStep1D(beta, config, 1.0, 0.0, 1)$vec # tirage avec Metropolis
-  data[k,] = etat 
+  data[k,] = config1 
   energie   = c(energie,lattice1DenergyNN(config))
 }
 plot(energie, type ='l')
@@ -428,8 +441,8 @@ ising1D = function(n){
 # un petit test de ce qu'on fait
 
 n       = 15   # nombre de sites 
-config  = ising(n) # ensemble des configurations 1D à n sites
-beta    = 0.9  # paramètre de température
+config  = ising1D(n) # ensemble des configurations 1D à n sites
+beta    = 0.9 # paramètre de température
 energie = c()
 
 for (k in 1:2**n){ energie = c(energie,totalEnergy1D(config[k,], 1, 0)) } # totalEnergy1D(config[k,], 1, 0), 1 interraction voisins, 0 champs ext
@@ -614,7 +627,7 @@ ggplot(df_recurs_naif, aes(x = param_1, y = param_2, color = iteration)) + geom_
 ```{r graph lines mc mle recur}
 df_recurs_naif <- read_csv("df_recurs_naif.csv")[,-1]
 df_recurs_naif_melted = melt(df_recurs_naif, id.vars = "iteration")
-ggplot(df_recurs_naif_melted, aes(x = iteration, y = value)) + geom_line(aes(color = variable, group = variable)) 
+ggplot(df_recurs_naif_melted, aes(x = iteration, y = value)) + geom_line(aes(color = variable, group = variable)) + scale_color_manual(values = pal2)
 ```
 Cette approche naïve n'améliore pas la précision de notre estimation. 
 
@@ -719,11 +732,9 @@ df_hasting_iid_melted = melt(df_hasting_iid_agg[,-6], id.vars = "epsilon")
 ```
 
 ```{r}
-graph1 = ggplot(df_hasting_iid_melted, aes(x = epsilon, y = value)) + geom_line(aes(color = variable, group = variable))
+ggplot(df_hasting_iid_melted, aes(x = epsilon, y = value)) + geom_line(aes(color = variable, group = variable)) + scale_color_manual(values = pal5)
 
-graph2 = ggplot(df_hasting_iid, aes(x = epsilon, y = time)) + geom_line()
-
-ggarrange(graph1, graph2, ncol = 1, nrow = 2)
+#ggplot(df_hasting_iid, aes(x = epsilon, y = time)) + geom_line()
 ```
 $\epsilon = 2$ semble être un bon choix au regard du gain en terme d'auto-corrélation et du temps de calcul.
 
@@ -823,7 +834,7 @@ df_rev_log_reg_agg$ratio_noise_data = as.factor(df_rev_log_reg_agg$ratio_noise_d
 df_rev_log_reg_agg$size_data = as.numeric(df_rev_log_reg_agg$size_data)
 df_rev_log_reg_agg$const_error = abs(df_rev_log_reg_agg$const - 4*sqrt(2*pi))
 
-ggplot(df_rev_log_reg_agg, aes(x = size_data, y = const_error, color = ratio_alpha_psi, shape = ratio_noise_data)) + geom_line() + geom_point()
+ggplot(df_rev_log_reg_agg, aes(x = size_data, y = const_error, color = ratio_alpha_psi, shape = ratio_noise_data)) + geom_line() + geom_point() + scale_color_manual(values = pal4)
 ```
 
 
@@ -868,7 +879,7 @@ rev_log_reg_with_noise = function(x, law_noise, n, alpha, psi, h1, h2){
 }
 ```
 
-```{r rev_log_reg init}
+```{r rev_log_reg_noise init}
 pm_barre = function(u, theta){
   return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
 }
@@ -899,10 +910,10 @@ for (m in M){
     for (i in 1:1000) {
        df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, rcauchy, n*m, alpha, alpha, pm_barre, dcauchy), m, n, "cauchy")
     }
-    for (i in 1:100) {
+    for (i in 1:1000) {
        df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, rnorm, n*m, alpha, alpha, pm_barre, dnorm), m, n, "normale")
     }
-    for (i in 1:100) {
+    for (i in 1:1000) {
        df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, runif, n*m, alpha, c(min(x),max(x)), pm_barre, dunif), m, n, "unif")
     }
   }
@@ -921,6 +932,6 @@ df_rev_log_reg_agg$ratio_noise_data = as.factor(df_rev_log_reg_agg$ratio_noise_d
 df_rev_log_reg_agg$size_data = as.numeric(df_rev_log_reg_agg$size_data)
 df_rev_log_reg_agg$const_error = abs(df_rev_log_reg_agg$const - 4*sqrt(2*pi))
 
-ggplot(df_rev_log_reg_agg, aes(x = size_data, y = const_error, color = law_noise, shape = ratio_noise_data)) + geom_line() + geom_point()
+ggplot(df_rev_log_reg_agg, aes(x = size_data, y = const_error, color = law_noise, shape = ratio_noise_data)) + geom_line() + geom_point() + scale_color_manual(values = pal3)
 ```
 
