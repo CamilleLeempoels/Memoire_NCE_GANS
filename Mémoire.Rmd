@@ -379,12 +379,13 @@ ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + 
 \subsection{Modèle d'Ising}
 
 ```{r}
+# temps estimé 1min n=500, iter=100k
 library('isingLenzMC')
 
 beta    = 0.9             # paramètre de temperature 
-n       = 15              # nombre de sites
-config1 = rep(1,n)        # generer une configuration à n sites
-config  = genConfig1D(n)  # generer une configuration à n sites aléatoirement
+n       = 500             # nombre de sites
+config  = rep(1,n)        # generer une configuration à n sites
+config1 = genConfig1D(n)  # generer une configuration à n sites aléatoirement
 
 energie = c()
 iter = 100000
@@ -395,7 +396,11 @@ for (k in 1:iter){
   #ce que l'on observera graphiquement
   config = isStep1D(beta, config, 1.0, 0.0, 1)$vec # tirage avec Metropolis
   data[k,] = config
+<<<<<<< Updated upstream
   energie   = c(energie,lattice1DenergyNN(config))
+=======
+  energie   = c(energie,totalEnergy1D(config,1.0,0.0))
+>>>>>>> Stashed changes
 }
 plot(energie, type ='l')
 ```
@@ -413,7 +418,7 @@ coeur = function(constante_normalisation,beta=0.9,config){
   # Lorsque 'constante_normalisation' == vraie valeur de la fonction de partition pour le paramètre beta 
   #       alors return la probabilité de la configuration de spins 'config'
   
-  return ( exp(-beta*lattice1DenergyNN(config))/constante_normalisation )
+  return ( exp(-beta*totalEnergy1D(config,1.0,0.0))/constante_normalisation )
 }
   
 ising1D = function(n){
@@ -440,15 +445,19 @@ ising1D = function(n){
 
 n       = 15   # nombre de sites 
 config  = ising1D(n) # ensemble des configurations 1D à n sites
+<<<<<<< Updated upstream
 beta    = 0.9 # paramètre de température
+=======
+beta    = 0.9  # paramètre de température
+>>>>>>> Stashed changes
 energie = c()
 
-for (k in 1:2**n){ energie = c(energie,totalEnergy1D(config[k,], 1, 0)) } # totalEnergy1D(config[k,], 1, 0), 1 interraction voisins, 0 champs ext
+for (k in 1:2**n){ energie = c(energie,totalEnergy1D(c(config[k,]), 1, 0) ) } # totalEnergy1D(config[k,], 1, 0), 1 interraction voisins, 0 champs ext
 
 cst_normalisation  = sum(exp(-beta*energie))
 
 proba  = 0
-for (k in 1:2**n){ proba = proba + coeur(cst_normalisation,config[k,]) } 
+for (k in 1:2**n){ proba = proba + coeur(cst_normalisation,beta=0.9,config[k,]) }
 (proba)
 print("it looks good")
 ```
@@ -456,10 +465,10 @@ Il se peut qu'il y ait conflit de notations pour cette sous section d'Ising avec
 De plus, il y'a une erreur en sortie que je n'arrive pas résoudre pour l'instant. Mais je ne pense pas qu'elle soit très compliquée...
 ```{r eval=FALSE}
 log_pn = function(u,param_pn){
-  # pn densite iid N(param_pn[1],param_pn[2]) de taille length(u) 
+  # pn densite iid N(param_pn[1],param_pn[2]) de dim length(u) 
   # Verifier que c'est bien ce qui est codé
   n     = length(u)
-  log_d = 0
+  log_d = 0 
   for (k in 1:n){ log_d = log_d - 0.5 * ((u[k] - param_pn[1]) / param_pn[2]) ** 2 }
   return(-0.5*n*log(2*pi*(param_pn[2]**2)) + log_d)
 }
