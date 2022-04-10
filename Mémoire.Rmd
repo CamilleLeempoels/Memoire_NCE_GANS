@@ -559,10 +559,6 @@ sim_ising_1D = function(beta, nb_config, nb_spins){
     data[k,] = isStep1D(beta, data[k-1,], 1.0, 0.0, 1)$vec # tirage avec Metropolis
     data_for_plot = append(data_for_plot, data[k,])
   }
-  
-  # plot
-  
-  
   return(data)
 }
 
