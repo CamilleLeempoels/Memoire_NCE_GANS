@@ -543,8 +543,11 @@ all_config_ising1D = function(nb_spins){
   # return l'ensemble des configuration 1D possibles dans une matrice
   # chaque ligne correspond à une configuration possible
   
-  if (n==1) return(matrix(c(1,-1),nrow=2))
-  return(cbind( rbind(ising1D(n-1),ising1D(n-1)), c(rep(1,2**(n-1)),rep(-1,2**(n-1)))  ))
+  if (nb_spins == 1) {
+    return(matrix(c(1,-1),nrow=2))
+  } else {
+    return(cbind(rbind(all_config_ising1D(nb_spins - 1), all_config_ising1D(nb_spins - 1)), c(rep(1,2**(nb_spins - 1)),rep(-1,2**(nb_spins - 1)))))
+  }
 }
 
 sim_ising_1D = function(beta, nb_config, nb_spins){
@@ -588,20 +591,22 @@ log_pm_ising = function(u,theta){
   return ( - theta[1] * calc_energie(u, dim(u)[1]) + theta[2] )
 }
 
-log_pn_multivar_cont_unif = function(u){
-  return(log(rowProds(dunif(u, -1, 1))))
-}
 
-log_pn_multivar_dis_unif = function(u){
-  return(log(rowProds(ifelse(u == -1, 1/2, ifelse(u == 1, 1, 0)))))
+pn_multivar_cont_unif = function(u, psi){
+  return(rowProds(dunif(u, -1, 1)))
 }
 
 pn_multivar_dis_unif = function(u, psi){
   return(rowProds(ifelse(u == -1, 1/2, ifelse(u == 1, 1, 0))))
 }
 
-pn_multivar_cont_unif = function(u, psi){
-  return(rowProds(dunif(u, -1, 1)))
+
+log_pn_multivar_cont_unif = function(u){
+  return(log(rowProds(dunif(u, -1, 1))))
+}
+
+log_pn_multivar_dis_unif = function(u){
+  return(log(rowProds(ifelse(u == -1, 1/2, ifelse(u == 1, 1, 0)))))
 }
 
 pm_barre_ising = function(u, theta){
@@ -615,8 +620,6 @@ pm_barre_ising = function(u, theta){
 
 # ------------- Variables globales -----------------------------------------------------------------------------------------------
 
-m = iter
-n = iter
 beta_alpha = 0.9
 beta_psi = 0.5
 nb_spins = 20
@@ -641,7 +644,7 @@ calc_const(beta_alpha, nb_spins)
 
 # --------------- Estimation avec la regression logistique inverse ------------------------------------------------------
 
-rev_log_reg_with_noise(x, sim_multivar_cont_unif, n, c(beta_alpha), list(nb_spins, -1, 1), pm_barre_ising, pn_multivar_cont_unif)
+rev_log_reg_with_noise(x, sim_multivar_cont_unif, nb_config, c(beta_alpha), list(nb_spins, -1, 1), pm_barre_ising, pn_multivar_cont_unif)
 
 
 # --------------- Estimation avec NCE -----------------------------------------------------------------------------------
