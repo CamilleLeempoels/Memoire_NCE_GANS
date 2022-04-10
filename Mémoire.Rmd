@@ -177,6 +177,9 @@ nce = function(x, law_y, params_y, log_pm, log_pn, size_theta, n){
   
   return(c(theta[-size_theta], exp(-theta[size_theta])))
 }
+
+nce(x, sim_multivar_dis_unif, list(nb_spins,-1,1), log_pm_ising, log_pn_multivar_dis_unif, 2, n)
+
 ```
 
 \subsection{Graphiques}
@@ -382,13 +385,23 @@ ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + 
 # temps estimé 1min n=500, iter=100k
 library('isingLenzMC')
 
+sim_ising_1D = function(beta, nb_spins, nb_config){
+  config  = rep(1,n) 
+  data = matrix(nrow = iter, ncol = n)
+  data[1, ] = config
+  for (k in 2:iter){
+    data[k,] = isStep1D(beta, config, 1.0, 0.0, 1)$vec # tirage avec Metropolis
+  }
+  return(data)
+}
+
 beta    = 0.9             # paramètre de temperature 
 n       = 500             # nombre de sites
 config  = rep(1,n)        # generer une configuration à n sites
 config1 = genConfig1D(n)  # generer une configuration à n sites aléatoirement
 
 energie = c()
-iter = 100000
+iter = 10000
 data = matrix(nrow= iter, ncol = n)
 
 for (k in 1:iter){
@@ -400,6 +413,7 @@ for (k in 1:iter){
 }
 plot(energie, type ='l')
 ```
+
 
 On définit la fonction $coeur$ qui est à une constante de normalisation près la mesure de Gibbs associée à au modèle d'Ising de paramètre $\beta$.
 On définit la fonction $ising1D(n)$ qui est rend toutes les configurations de spins possibles d'un modèle d'Ising unidimensionnel à $n$ sites. 
@@ -455,6 +469,7 @@ print("if proba = 1, then it is good")
 ```
 Il se peut qu'il y ait conflit de notations pour cette sous section d'Ising avec les notations du précédent exemple.
 De plus, il y'a une erreur en sortie que je n'arrive pas résoudre pour l'instant. Mais je ne pense pas qu'elle soit très compliquée...
+
 ```{r eval=FALSE}
 log_pn = function(u,param_pn){
   # pn densite iid N(param_pn[1],param_pn[2]) de dim length(u) 
@@ -519,6 +534,121 @@ b_size       = 2**n
 nce_ising(matrix_ising,beta,log_pm,theta,law_pn,param_pn,log_pn,b_size)
 ```
 
+
+```{r}
+# --------------- Ising ---------------------------------------------------------------------------------------------------------
+
+all_config_ising1D = function(nb_spins){
+  # n : nombre de sites pour une configuration
+  # return l'ensemble des configuration 1D possibles dans une matrice
+  # chaque ligne correspond à une configuration possible
+  
+  if (n==1) return(matrix(c(1,-1),nrow=2))
+  return(cbind( rbind(ising1D(n-1),ising1D(n-1)), c(rep(1,2**(n-1)),rep(-1,2**(n-1)))  ))
+}
+
+sim_ising_1D = function(beta, nb_config, nb_spins){
+  config  = rep(1,nb_spins) 
+  data = matrix(nrow = nb_config, ncol = nb_spins)
+  data[1, ] = config
+  for (k in 2:nb_config){
+    data[k,] = isStep1D(beta, data[k-1,], 1.0, 0.0, 1)$vec # tirage avec Metropolis
+  }
+  return(data)
+}
+
+calc_energie = function(sim_ising, nb_config){
+  sim_ising_split = split(sim_ising, as.factor(1:nb_config))
+  energie = sapply(sim_ising_split, totalEnergy1D, 1, 0)   # interaction entre sites = 1 et avec le champ extérieur = 0
+  return(energie)
+}
+
+calc_const = function(beta,nb_spins){
+  ens_config = all_config_ising1D(nb_spins) # ensemble des configurations 1D à nb_spins sites
+  energie_total = calc_energie(ens_config, 2**nb_spins)
+  return(sum(exp(-beta*energie_total)))
+}
+
+# --------------- Simulations d'échantillons ------------------------------------------------------------------------------------
+
+sim_multivar_dis_unif = function(nb_samples, size_sample, a, b){
+  return(matrix(sample(c(a,b), nb_samples * size_sample, replace=T), ncol = size_sample))
+}
+
+sim_multivar_cont_unif = function(nb_samples, size_sample, minimum, maximum){
+  return(matrix(runif(nb_samples * size_sample, minimum, maximum), ncol = size_sample))
+}
+
+
+# --------------- Fonctions pm_barre, pm et pn -----------------------------------------------------------------------------------
+
+log_pm_ising = function(u,theta){
+  # theta[1] = beta
+  # theta[2] = -log(Z)
+  return ( - theta[1] * calc_energie(u, dim(u)[1]) + theta[2] )
+}
+
+log_pn_multivar_cont_unif = function(u){
+  return(log(rowProds(dunif(u, -1, 1))))
+}
+
+log_pn_multivar_dis_unif = function(u){
+  return(log(rowProds(ifelse(u == -1, 1/2, ifelse(u == 1, 1, 0)))))
+}
+
+pn_multivar_dis_unif = function(u, psi){
+  return(rowProds(ifelse(u == -1, 1/2, ifelse(u == 1, 1, 0))))
+}
+
+pn_multivar_cont_unif = function(u, psi){
+  return(rowProds(dunif(u, -1, 1)))
+}
+
+pm_barre_ising = function(u, theta){
+  return(exp(-theta[1] * calc_energie(u, dim(u)[1])))
+}
+
+```
+
+
+```{r}
+
+# ------------- Variables globales -----------------------------------------------------------------------------------------------
+
+m = iter
+n = iter
+beta_alpha = 0.9
+beta_psi = 0.5
+nb_spins = 20
+nb_config = 1000
+x = sim_ising_1D(beta_alpha, nb_config, nb_spins)
+y = sim_ising_1D(beta_psi, nb_config, nb_spins)
+
+energie_x = calc_energie(x, nb_config)
+energie_y = calc_energie(y, nb_config)
+
+# --------------- Calcul numérique de la constante --------------------------------------------------------------------------
+
+calc_const(beta_alpha, nb_spins)
+
+# --------------- Estimation avec MC MLE ------------------------------------------------------------------------------------
+
+
+#L = function(theta){ return(sum(log(pm_barre_ising(x,theta)/pm_barre_ising(x,psi))) - m*log(mean(pm_barre_ising(y,theta)/pm_barre_ising(y,psi))))}
+
+#theta = optim( par = c(0.9, 1), gr = 'CG', control = list(fnscale=-1), fn = L)$par
+
+
+# --------------- Estimation avec la regression logistique inverse ------------------------------------------------------
+
+rev_log_reg_with_noise(x, sim_multivar_cont_unif, n, c(beta_alpha), list(nb_spins, -1, 1), pm_barre_ising, pn_multivar_cont_unif)
+
+
+# --------------- Estimation avec NCE -----------------------------------------------------------------------------------
+
+#nce(x, sim_multivar_dis_unif, list(nb_spins,-1,1), log_pm_ising, log_pn_multivar_dis_unif, 2, n)
+
+```
 
 \newpage
 \section{Nouvelles approches}
@@ -850,11 +980,11 @@ rev_log_reg_with_noise = function(x, law_noise, n, alpha, psi, h1, h2){
   
   # calcul des probabilités p_j
   denom = function(sample, eta) {
-    return(h1(sample, alpha)*exp(eta[1]) + h2(sample,psi[1],psi[2])*exp(eta[2]))}
+    return(h1(sample, alpha)*exp(eta[1]) + h2(sample,psi)*exp(eta[2]))}
   p_1 = function(sample, eta){
     return (h1(sample, alpha)*exp(eta[1]) / denom(sample, eta))}
   p_2 = function(sample, eta){
-    return (h2(sample, psi[1],psi[2])*exp(eta[2]) / denom(sample, eta))}
+    return (h2(sample, psi)*exp(eta[2]) / denom(sample, eta))}
   
   # fonction objectif
   L = function(eta) {
@@ -885,6 +1015,10 @@ pm_barre = function(u, theta){
   return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
 }
 
+pn_cauchy = function(u, psi){
+  return(dcauchy(u, psi[1], psi[2]))
+}
+
 m = 1000
 n = 10000
 x = rnorm(m,2,4)
@@ -894,7 +1028,7 @@ alpha = mc_mle(x, n, psi, pm_barre)
 print(alpha)
 ```
 ```{r}
-rev_log_reg_with_noise(x, rcauchy, n, c(2,4), c(mean(x),sd(x)), pm_barre, dcauchy)
+rev_log_reg_with_noise(x, rcauchy, n, c(2,4), c(mean(x),sd(x)), pm_barre, pn_cauchy)
 ```
 
 ```{r eval=FALSE, include=FALSE}
