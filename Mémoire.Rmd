@@ -1174,16 +1174,14 @@ compute_delta_energie = function(sample, row_site, col_site){
 
 # Simulation
 
-sim_ising_2D = function(beta, heigth, width, iter) {
-  config = init_ising(heigth, width)
-  print(graph_config(config))
+sim_ising_2D = function(beta, heigth, width, iter, init) {
+  config = init
   for (i in 1:iter) {
     row = sample(1:heigth, 1)
     col = sample(1:width, 1)
     p = 1/(1 + exp(beta * compute_delta_energie(config, row, col)))
     config[row, col] = sample(c(1,-1), 1, prob = c(p, 1-p))
   }
-  print(graph_config(config))
   return(config)
 }
 
@@ -1202,14 +1200,53 @@ graph_config = function(config){
          + coord_fixed()
          + theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.title.x = element_blank(), axis.title.y = element_blank()))
 }
+```
+
+On va générer un échantillon de $m$ configurations distribuées selon un modèle d'Ising en 2D. Le résultat sera présenté sous la forme d'une matrice verticale où seront empilées les configurations.
+
+```{r}
+samples_ising_2D = function(beta, heigth, width, iter, epsilon, m){
+  # beta : paramètre du modèle
+  # heigth, width : taille d'une configuration
+  # iter : nombre d'itérations pour atteindre la stationnarité
+  # epsilon : pas de décorrélation pour sélectionner des configs iid
+  # m : nombre de configurations dans notre échantillon
+  
+  # initialisation
+  current_config = init_ising(heigth, width)
+  
+  # On effectue des itérations jusqu'à atteindre supposément l'état stationnaire
+  current_config = sim_ising_2D(beta, heigth, width, iter, current_config)
+  samples = current_config
+  
+  # Une fois la stationnarité atteinte, on prend un échantillon tous les epsilon pas afin que nos échantillons soient iid
+  for (i in 2:m){
+    current_config = sim_ising_2D(beta, heigth, width, epsilon, current_config)
+    samples = rbind(samples, current_config)
+  }
+  
+  return(samples)
+}
 
 ```
 
 ```{r}
-sim_ising_2D(0.5, 15, 15, 100000)
+beta = 0.5
+width = 15
+heigth = 15
+iter = 100000
+epsilon = 100
+m = 10000
+init = init_ising(heigth, width)
+
+test = sim_ising_2D(beta, heigth, width, iter, init)
+#graph_config(test)
+
+samples = samples_ising_2D(beta, heigth, width, iter, epsilon, m)
 ```
 
-
-
-
+```{r}
+graph_config(samples[1:15,])
+graph_config(samples[149986:150000,])
+```
 
