@@ -27,7 +27,7 @@ library(tseries)
 library(readr)
 ```
 
-```{r}
+```{r include=FALSE}
 # Palettes
 
 pal5 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#E1AF00", "#DC863B")
@@ -239,8 +239,7 @@ Note : il faudrait optimiser le temps de calcul de ces fonctions, peut-être en 
 
 \newpage
 
-\section{Applications}
-\subsection{Exemple basique : la loi normale}
+\section{Illustration avec la loi normale }
 
 Soit $x$ l'échantillon de taille $m$ obtenu selon la loi de densité inconnue $p_d$.
 
@@ -266,6 +265,8 @@ n = 10000
 x = rnorm(m, 2, 4)
 size_theta = 3
 ```
+
+\subsection{Méthode MC MLE}
 
 ```{r mc_mle application}
 # METHODE MC MLE
@@ -334,6 +335,7 @@ df_mcmle_psi$ratio_alpha_psi = as.factor(df_mcmle_psi$ratio_alpha_psi)
 ggplot(df_mcmle_psi, aes(x = param_1, y = param_2, color = ratio_alpha_psi)) + geom_point() + scale_color_manual(values = pal5)
 ```
 
+\subsection{Méthode NCE}
 
 ```{r nce application}
 # METHODE NCE
@@ -379,295 +381,6 @@ ggplot(df_nce, aes(x = param_1, y = param_2, color = size_data, shape = ratio_no
 ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + geom_boxplot() + scale_color_manual(values = pal2)
 ```
 
-\subsection{Modèle d'Ising}
-
-```{r}
-# temps estimé 1min n=500, iter=100k
-library('isingLenzMC')
-
-sim_ising_1D = function(beta, nb_spins, nb_config){
-  config  = rep(1,n) 
-  data = matrix(nrow = iter, ncol = n)
-  data[1, ] = config
-  for (k in 2:iter){
-    data[k,] = isStep1D(beta, config, 1.0, 0.0, 1)$vec # tirage avec Metropolis
-  }
-  return(data)
-}
-
-beta    = 0.9             # paramètre de temperature 
-n       = 500             # nombre de sites
-config  = rep(1,n)        # generer une configuration à n sites
-config1 = genConfig1D(n)  # generer une configuration à n sites aléatoirement
-
-energie = c()
-iter = 10000
-data = matrix(nrow= iter, ncol = n)
-
-for (k in 1:iter){
-  # on tire successivement des configurations jusqu'à obtenir convergence du niveau d'énergie
-  #ce que l'on observera graphiquement
-  config = isStep1D(beta, config, 1.0, 0.0, 1)$vec # tirage avec Metropolis
-  data[k,] = config
-  energie   = c(energie,totalEnergy1D(config,1.0,0.0))
-}
-plot(energie, type ='l')
-```
-
-
-On définit la fonction $coeur$ qui est à une constante de normalisation près la mesure de Gibbs associée à au modèle d'Ising de paramètre $\beta$.
-On définit la fonction $ising1D(n)$ qui est rend toutes les configurations de spins possibles d'un modèle d'Ising unidimensionnel à $n$ sites. 
-
-```{r}
-coeur = function(constante_normalisation,beta=0.9,config){
-  
-  # constante_normalisation :  fonction de partition inconnue
-  # beta                    :  paramètre de température 
-  # config                  :  une configuration de spins
-  
-  # Lorsque 'constante_normalisation' == vraie valeur de la fonction de partition pour le paramètre beta 
-  #       alors return la probabilité de la configuration de spins 'config'
-  
-  return ( exp(-beta*totalEnergy1D(config,1.0,0.0))/constante_normalisation )
-}
-  
-ising1D = function(n){
-
-  # n : nombre de sites pour une configuration
-  
-  # return l'ensemble des configuration 1D possibles dans une matrice
-  # chaque ligne correspond à une configuration possible
-  
-  if (n==1)
-    {
-    return(matrix(c(1,-1),nrow=2))
-    }
-  else
-    {
-    return(cbind( rbind(ising1D(n-1),ising1D(n-1)), c(rep(1, 2**(n-1)), rep(-1,2**(n-1)))))
-    }
-}
-
-```
-
-```{r eval=FALSE}
-# un petit test de ce qu'on fait
-
-n       = 15   # nombre de sites 
-config  = ising1D(n) # ensemble des configurations 1D à n sites
-beta    = 0.9 # paramètre de température
-energie = c()
-
-for (k in 1:2**n){ energie = c(energie,totalEnergy1D(c(config[k,]), 1, 0) ) } # totalEnergy1D(config[k,], 1, 0), 1 interraction voisins, 0 champs ext
-
-cst_normalisation  = sum(exp(-beta*energie))
-
-proba  = 0
-for (k in 1:2**n){ proba = proba + coeur(cst_normalisation,beta=0.9,config[k,]) }
-(proba)
-print("if proba = 1, then it is good")
-```
-Il se peut qu'il y ait conflit de notations pour cette sous section d'Ising avec les notations du précédent exemple.
-De plus, il y'a une erreur en sortie que je n'arrive pas résoudre pour l'instant. Mais je ne pense pas qu'elle soit très compliquée...
-
-```{r eval=FALSE}
-log_pn = function(u,param_pn){
-  # pn densite iid N(param_pn[1],param_pn[2]) de dim length(u) 
-  # Verifier que c'est bien ce qui est codé
-  n     = length(u)
-  log_d = 0 
-  for (k in 1:n){ log_d = log_d - 0.5 * ((u[k] - param_pn[1]) / param_pn[2]) ** 2 }
-  return(-0.5*n*log(2*pi*(param_pn[2]**2)) + log_d)
-}
-
-log_pm = function(configuration,beta,theta){
-  # theta = -log(Z)
-  # interraction entre sites = 1 et avec le champs extérieure = 0
-  return ( -beta*totalEnergy1D(configuration,1,0) + theta )
-}
-
-
-nce_ising = function(matrix_ising,beta,log_pm,theta,law_pn,param_pn,log_pn,b_size){
-  # matrix_ising = matrice ou en ligne sont rangées les observations d'Ising en 1D
-  # beta         = paramètre de température de modèle d'Ising \in ]0,1[
-  # log_pm       = logarithme de la densité d'Ising
-  # theta        = paramètre à optimiser , en lien avec la constante de normalisation
-  
-  # law_pn   = loi du bruit qui doit contenir dans son support {0,1}
-  # param_pn = paramètres de la loi law_pn
-  # log_pn   = log de la densité de pn
-  
-  # b_size  = nombre d'observation du bruit, à ne pas confondre avec la taille d'une observation du bruit qui est fixée à n
-  
-  n     = dim(matrix_ising)[2] # n = nombre de sites pour les observations d'Ising en 1D
-  m     = dim(matrix_ising)[1] # m = nombre d'observations d'Ising en 1D
-  
-  bruit = matrix(do.call(law_pn,c(list(b_size*n),param_pn)),ncol=n) # échantillon de vecteurs de bruit disposé en matrice, ligne par ligne
-  
-  h = function(configuration,theta){return( 1 / (1 + b_size/m * exp(log_pn(configuration,param_pn) - log_pm(configuration,beta,theta))))}
-  
-  J = function(theta){
-    # x vecteur de densite inconnue 
-    # y vecyeur de bruit 
-    objectif = 0
-    for (k in 1:m){objectif = objectif + log(h(matrix_ising[k,],theta)) }   # composante de l'objectif liée aux données
-    for (k in 1:b_size){objectif = objectif + log(1 - h(bruit[k,],theta)) } # composante de l'objectif liée au bruit
-    return( objectif )
-    }
-  
-  solution = optimize(f = J,
-                      interval = c(-1e5,1e5),
-                      maximum  = FALSE)
-  
-  return(exp(-solution))
-}
-
-
-n            = 10
-matrix_ising = ising1D(n)[100:900,]
-beta         = 0.9
-theta        = 1
-law_pn       = rnorm
-param_pn     = c(0,1)
-b_size       = 2**n
-
-nce_ising(matrix_ising,beta,log_pm,theta,law_pn,param_pn,log_pn,b_size)
-```
-
-
-```{r}
-# --------------- Ising ---------------------------------------------------------------------------------------------------------
-
-all_config_ising1D = function(nb_spins){
-  # n : nombre de sites pour une configuration
-  # return l'ensemble des configuration 1D possibles dans une matrice
-  # chaque ligne correspond à une configuration possible
-  
-  if (nb_spins == 1) {
-    return(matrix(c(1,-1),nrow=2))
-  } else {
-    return(cbind(rbind(all_config_ising1D(nb_spins - 1), all_config_ising1D(nb_spins - 1)), c(rep(1,2**(nb_spins - 1)),rep(-1,2**(nb_spins - 1)))))
-  }
-}
-
-sim_ising_1D = function(beta, nb_config, nb_spins){
-  config  = rep(1,nb_spins) 
-  data = matrix(nrow = nb_config, ncol = nb_spins)
-  data[1, ] = config
-  data_for_plot = c(config)
-  for (k in 2:nb_config){
-    data[k,] = isStep1D(beta, data[k-1,], 1.0, 0.0, 1)$vec # tirage avec Metropolis
-    data_for_plot = append(data_for_plot, data[k,])
-  }
-  return(data)
-}
-
-graph_ising = function(configs){
-  shape = dim(configs)
-  nb_config = shape[1]
-  nb_spins = shape[2]
-  
-  valeur_spin = c(t(configs))
-  iterations = rep(1:nb_config, rep(nb_spins, nb_config))
-  id_site = rep(1:nb_spins, nb_config)
-  
-  df = data.frame(valeur_spin, iterations, id_site)
-  return(ggplot(df, aes(iterations, id_site, fill = valeur_spin)) + geom_tile())
-}
-
-calc_energie = function(sim_ising, nb_config){
-  sim_ising_split = split(sim_ising, as.factor(1:nb_config))
-  energie = sapply(sim_ising_split, totalEnergy1D, 1, 0)   # interaction entre sites = 1 et avec le champ extérieur = 0
-  return(energie)
-}
-
-calc_const = function(beta,nb_spins){
-  ens_config = all_config_ising1D(nb_spins) # ensemble des configurations 1D à nb_spins sites
-  energie_total = calc_energie(ens_config, 2**nb_spins)
-  return(sum(exp(-beta*energie_total)))
-}
-
-# --------------- Simulations d'échantillons ------------------------------------------------------------------------------------
-
-sim_multivar_dis_unif = function(nb_samples, size_sample, a, b){
-  return(matrix(sample(c(a,b), nb_samples * size_sample, replace=T), ncol = size_sample))
-}
-
-sim_multivar_cont_unif = function(nb_samples, size_sample, minimum, maximum){
-  return(matrix(runif(nb_samples * size_sample, minimum, maximum), ncol = size_sample))
-}
-
-
-# --------------- Fonctions pm_barre, pm et pn -----------------------------------------------------------------------------------
-
-log_pm_ising = function(u,theta){
-  # theta[1] = beta
-  # theta[2] = -log(Z)
-  return ( - theta[1] * calc_energie(u, dim(u)[1]) + theta[2] )
-}
-
-pn_multivar_cont_unif = function(u, psi){
-  return(rowProds(dunif(u, -1, 1)))
-}
-
-pn_multivar_dis_unif = function(u, psi){
-  return(rowProds(ifelse(u == -1, 1/2, ifelse(u == 1, 1, 0))))
-}
-
-log_pn_multivar_cont_unif = function(u){
-  return(log(rowProds(dunif(u, -1, 1))))
-}
-
-log_pn_multivar_dis_unif = function(u){
-  return(log(rowProds(ifelse(u == -1, 1/2, ifelse(u == 1, 1, 0)))))
-}
-
-pm_barre_ising = function(u, theta){
-  return(exp(-theta[1] * calc_energie(u, dim(u)[1])))
-}
-
-```
-
-
-```{r}
-
-# ------------- Variables globales -----------------------------------------------------------------------------------------------
-
-beta_alpha = 0.9
-beta_psi = 0.1
-nb_spins = 30
-nb_config = 1000
-x = sim_ising_1D(beta_alpha, nb_config, nb_spins)
-y = sim_ising_1D(beta_psi, nb_config, nb_spins)
-
-#energie_x = calc_energie(x, nb_config)
-#energie_y = calc_energie(y, nb_config)
-
-graph_ising(x)
-graph_ising(y)
-
-# --------------- Calcul numérique de la constante --------------------------------------------------------------------------
-
-# calc_const(beta_alpha, nb_spins)
-
-# --------------- Estimation avec MC MLE ------------------------------------------------------------------------------------
-
-
-#L = function(theta){ return(sum(log(pm_barre_ising(x,theta)/pm_barre_ising(x,psi))) - m*log(mean(pm_barre_ising(y,theta)/pm_barre_ising(y,psi))))}
-
-#theta = optim( par = c(0.9, 1), gr = 'CG', control = list(fnscale=-1), fn = L)$par
-
-
-# --------------- Estimation avec la regression logistique inverse ------------------------------------------------------
-
-# rev_log_reg_with_noise(x, sim_multivar_cont_unif, nb_config, c(beta_alpha), list(nb_spins, -1, 1), pm_barre_ising, pn_multivar_cont_unif)
-
-
-# --------------- Estimation avec NCE -----------------------------------------------------------------------------------
-
-#nce(x, sim_multivar_dis_unif, list(nb_spins,-1,1), log_pm_ising, log_pn_multivar_dis_unif, 2, n)
-
-```
 
 \newpage
 \section{Nouvelles approches}
@@ -1088,4 +801,415 @@ df_rev_log_reg_agg$const_error = abs(df_rev_log_reg_agg$const - 4*sqrt(2*pi))
 
 ggplot(df_rev_log_reg_agg, aes(x = size_data, y = const_error, color = law_noise, shape = ratio_noise_data)) + geom_line() + geom_point() + scale_color_manual(values = pal3)
 ```
+
+
+
+\newpage
+\section{Application : Modèle d'Ising}
+\subsection{Simulation en 1D (première approche)}
+
+```{r eval=FALSE}
+# temps estimé 1min n=500, iter=100k
+library('isingLenzMC')
+
+sim_ising_1D = function(beta, nb_spins, nb_config){
+  config  = rep(1,n) 
+  data = matrix(nrow = iter, ncol = n)
+  data[1, ] = config
+  for (k in 2:iter){
+    data[k,] = isStep1D(beta, config, 1.0, 0.0, 1)$vec # tirage avec Metropolis
+  }
+  return(data)
+}
+
+beta    = 0.9             # paramètre de temperature 
+n       = 500             # nombre de sites
+config  = rep(1,n)        # generer une configuration à n sites
+config1 = genConfig1D(n)  # generer une configuration à n sites aléatoirement
+
+energie = c()
+iter = 10000
+data = matrix(nrow= iter, ncol = n)
+
+for (k in 1:iter){
+  # on tire successivement des configurations jusqu'à obtenir convergence du niveau d'énergie
+  #ce que l'on observera graphiquement
+  config = isStep1D(beta, config, 1.0, 0.0, 1)$vec # tirage avec Metropolis
+  data[k,] = config
+  energie   = c(energie,totalEnergy1D(config,1.0,0.0))
+}
+plot(energie, type ='l')
+```
+
+
+On définit la fonction $coeur$ qui est à une constante de normalisation près la mesure de Gibbs associée à au modèle d'Ising de paramètre $\beta$.
+On définit la fonction $ising1D(n)$ qui est rend toutes les configurations de spins possibles d'un modèle d'Ising unidimensionnel à $n$ sites. 
+
+```{r eval=FALSE}
+coeur = function(constante_normalisation,beta=0.9,config){
+  
+  # constante_normalisation :  fonction de partition inconnue
+  # beta                    :  paramètre de température 
+  # config                  :  une configuration de spins
+  
+  # Lorsque 'constante_normalisation' == vraie valeur de la fonction de partition pour le paramètre beta 
+  #       alors return la probabilité de la configuration de spins 'config'
+  
+  return ( exp(-beta*totalEnergy1D(config,1.0,0.0))/constante_normalisation )
+}
+  
+ising1D = function(n){
+
+  # n : nombre de sites pour une configuration
+  
+  # return l'ensemble des configuration 1D possibles dans une matrice
+  # chaque ligne correspond à une configuration possible
+  
+  if (n==1)
+    {
+    return(matrix(c(1,-1),nrow=2))
+    }
+  else
+    {
+    return(cbind( rbind(ising1D(n-1),ising1D(n-1)), c(rep(1, 2**(n-1)), rep(-1,2**(n-1)))))
+    }
+}
+
+```
+
+```{r eval=FALSE}
+# un petit test de ce qu'on fait
+
+n       = 15   # nombre de sites 
+config  = ising1D(n) # ensemble des configurations 1D à n sites
+beta    = 0.9 # paramètre de température
+energie = c()
+
+for (k in 1:2**n){ energie = c(energie,totalEnergy1D(c(config[k,]), 1, 0) ) } # totalEnergy1D(config[k,], 1, 0), 1 interraction voisins, 0 champs ext
+
+cst_normalisation  = sum(exp(-beta*energie))
+
+proba  = 0
+for (k in 1:2**n){ proba = proba + coeur(cst_normalisation,beta=0.9,config[k,]) }
+(proba)
+print("if proba = 1, then it is good")
+```
+
+Il se peut qu'il y ait conflit de notations pour cette sous section d'Ising avec les notations du précédent exemple.
+De plus, il y'a une erreur en sortie que je n'arrive pas résoudre pour l'instant. Mais je ne pense pas qu'elle soit très compliquée...
+
+```{r eval=FALSE}
+log_pn = function(u,param_pn){
+  # pn densite iid N(param_pn[1],param_pn[2]) de dim length(u) 
+  # Verifier que c'est bien ce qui est codé
+  n     = length(u)
+  log_d = 0 
+  for (k in 1:n){ log_d = log_d - 0.5 * ((u[k] - param_pn[1]) / param_pn[2]) ** 2 }
+  return(-0.5*n*log(2*pi*(param_pn[2]**2)) + log_d)
+}
+
+log_pm = function(configuration,beta,theta){
+  # theta = -log(Z)
+  # interraction entre sites = 1 et avec le champs extérieure = 0
+  return ( -beta*totalEnergy1D(configuration,1,0) + theta )
+}
+
+
+nce_ising = function(matrix_ising,beta,log_pm,theta,law_pn,param_pn,log_pn,b_size){
+  # matrix_ising = matrice ou en ligne sont rangées les observations d'Ising en 1D
+  # beta         = paramètre de température de modèle d'Ising \in ]0,1[
+  # log_pm       = logarithme de la densité d'Ising
+  # theta        = paramètre à optimiser , en lien avec la constante de normalisation
+  
+  # law_pn   = loi du bruit qui doit contenir dans son support {0,1}
+  # param_pn = paramètres de la loi law_pn
+  # log_pn   = log de la densité de pn
+  
+  # b_size  = nombre d'observation du bruit, à ne pas confondre avec la taille d'une observation du bruit qui est fixée à n
+  
+  n     = dim(matrix_ising)[2] # n = nombre de sites pour les observations d'Ising en 1D
+  m     = dim(matrix_ising)[1] # m = nombre d'observations d'Ising en 1D
+  
+  bruit = matrix(do.call(law_pn,c(list(b_size*n),param_pn)),ncol=n) # échantillon de vecteurs de bruit disposé en matrice, ligne par ligne
+  
+  h = function(configuration,theta){return( 1 / (1 + b_size/m * exp(log_pn(configuration,param_pn) - log_pm(configuration,beta,theta))))}
+  
+  J = function(theta){
+    # x vecteur de densite inconnue 
+    # y vecyeur de bruit 
+    objectif = 0
+    for (k in 1:m){objectif = objectif + log(h(matrix_ising[k,],theta)) }   # composante de l'objectif liée aux données
+    for (k in 1:b_size){objectif = objectif + log(1 - h(bruit[k,],theta)) } # composante de l'objectif liée au bruit
+    return( objectif )
+    }
+  
+  solution = optimize(f = J,
+                      interval = c(-1e5,1e5),
+                      maximum  = FALSE)
+  
+  return(exp(-solution))
+}
+
+
+n            = 10
+matrix_ising = ising1D(n)[100:900,]
+beta         = 0.9
+theta        = 1
+law_pn       = rnorm
+param_pn     = c(0,1)
+b_size       = 2**n
+
+nce_ising(matrix_ising,beta,log_pm,theta,law_pn,param_pn,log_pn,b_size)
+```
+
+\subsection{Simulation en 1D (deuxième approche)}
+
+
+```{r eval=FALSE}
+# --------------- Ising ---------------------------------------------------------------------------------------------------------
+
+all_config_ising1D = function(nb_spins){
+  # n : nombre de sites pour une configuration
+  # return l'ensemble des configuration 1D possibles dans une matrice
+  # chaque ligne correspond à une configuration possible
+  
+  if (nb_spins == 1) {
+    return(matrix(c(1,-1),nrow=2))
+  } else {
+    return(cbind(rbind(all_config_ising1D(nb_spins - 1), all_config_ising1D(nb_spins - 1)), c(rep(1,2**(nb_spins - 1)),rep(-1,2**(nb_spins - 1)))))
+  }
+}
+
+sim_ising_1D = function(beta, nb_config, nb_spins){
+  config  = rep(1,nb_spins) 
+  data = matrix(nrow = nb_config, ncol = nb_spins)
+  data[1, ] = config
+  data_for_plot = c(config)
+  for (k in 2:nb_config){
+    data[k,] = isStep1D(beta, data[k-1,], 1.0, 0.0, 1)$vec # tirage avec Metropolis
+    data_for_plot = append(data_for_plot, data[k,])
+  }
+  return(data)
+}
+
+graph_ising = function(configs){
+  shape = dim(configs)
+  nb_config = shape[1]
+  nb_spins = shape[2]
+  
+  valeur_spin = c(t(configs))
+  iterations = rep(1:nb_config, rep(nb_spins, nb_config))
+  id_site = rep(1:nb_spins, nb_config)
+  
+  df = data.frame(valeur_spin, iterations, id_site)
+  return(ggplot(df, aes(iterations, id_site, fill = valeur_spin)) + geom_tile())
+}
+
+calc_energie = function(sim_ising, nb_config){
+  sim_ising_split = split(sim_ising, as.factor(1:nb_config))
+  energie = sapply(sim_ising_split, totalEnergy1D, 1, 0)   # interaction entre sites = 1 et avec le champ extérieur = 0
+  return(energie)
+}
+
+calc_const = function(beta,nb_spins){
+  ens_config = all_config_ising1D(nb_spins) # ensemble des configurations 1D à nb_spins sites
+  energie_total = calc_energie(ens_config, 2**nb_spins)
+  return(sum(exp(-beta*energie_total)))
+}
+
+# --------------- Simulations d'échantillons ------------------------------------------------------------------------------------
+
+sim_multivar_dis_unif = function(nb_samples, size_sample, a, b){
+  return(matrix(sample(c(a,b), nb_samples * size_sample, replace=T), ncol = size_sample))
+}
+
+sim_multivar_cont_unif = function(nb_samples, size_sample, minimum, maximum){
+  return(matrix(runif(nb_samples * size_sample, minimum, maximum), ncol = size_sample))
+}
+
+
+# --------------- Fonctions pm_barre, pm et pn -----------------------------------------------------------------------------------
+
+log_pm_ising = function(u,theta){
+  # theta[1] = beta
+  # theta[2] = -log(Z)
+  return ( - theta[1] * calc_energie(u, dim(u)[1]) + theta[2] )
+}
+
+pn_multivar_cont_unif = function(u, psi){
+  return(rowProds(dunif(u, -1, 1)))
+}
+
+pn_multivar_dis_unif = function(u, psi){
+  return(rowProds(ifelse(u == -1, 1/2, ifelse(u == 1, 1, 0))))
+}
+
+log_pn_multivar_cont_unif = function(u){
+  return(log(rowProds(dunif(u, -1, 1))))
+}
+
+log_pn_multivar_dis_unif = function(u){
+  return(log(rowProds(ifelse(u == -1, 1/2, ifelse(u == 1, 1, 0)))))
+}
+
+pm_barre_ising = function(u, theta){
+  return(exp(-theta[1] * calc_energie(u, dim(u)[1])))
+}
+
+```
+
+
+```{r eval=FALSE}
+
+# ------------- Variables globales -----------------------------------------------------------------------------------------------
+
+beta_alpha = 0.5
+beta_psi = 0.1
+nb_spins = 15
+nb_config = 100000
+x = sim_ising_1D(beta_alpha, nb_config, nb_spins)
+y = sim_ising_1D(beta_psi, nb_config, nb_spins)
+
+#energie_x = calc_energie(x, nb_config)
+#energie_y = calc_energie(y, nb_config)
+
+graph_ising(x)
+graph_ising(y)
+
+# --------------- Calcul numérique de la constante --------------------------------------------------------------------------
+
+#calc_const(beta_alpha, nb_spins)
+
+# --------------- Estimation avec MC MLE ------------------------------------------------------------------------------------
+
+
+#L = function(theta){ return(sum(log(pm_barre_ising(x,theta)/pm_barre_ising(x,psi))) - m*log(mean(pm_barre_ising(y,theta)/pm_barre_ising(y,psi))))}
+
+#theta = optim( par = c(0.9, 1), gr = 'CG', control = list(fnscale=-1), fn = L)$par
+
+
+# --------------- Estimation avec la regression logistique inverse ------------------------------------------------------
+
+rev_log_reg_with_noise(x, sim_multivar_cont_unif, nb_config, c(beta_alpha), list(nb_spins, -1, 1), pm_barre_ising, pn_multivar_cont_unif)
+
+
+# --------------- Estimation avec NCE -----------------------------------------------------------------------------------
+
+#nce(x, sim_multivar_dis_unif, list(nb_spins,-1,1), log_pm_ising, log_pn_multivar_dis_unif, 2, n)
+
+```
+
+\subsection{Simulation en 2D}
+
+Algorithme de Gibbs : on part d'une configuration aléatoire. A chaque itération, on sélectionne un site $\sigma_j$ au hasard. Ce site prend la valeur 1 avec probabilité $p := \mathbb{P}(\sigma_j = 1 | \sigma_{-j})$ et -1 avec probabilité $1-p$. $\sigma_{-j}$ est une notation qui désigne les voisins de $\sigma_j$.
+
+On a $p = \frac{1}{1 + exp(\beta \Delta H)}$ avec $\Delta H = 2\sigma_j\sum_j\sigma_{-j}$.
+
+```{r}
+# Initialisation de façon uniforme
+init_ising = function(heigth, width){
+  return(matrix(sample(c(-1,1), heigth * width, replace=T), ncol = width))
+}
+
+# Sélection des voisins, dans l'ordre haut - droite - bas - gauche
+
+get_neighbors = function(sample, row_site, col_site){
+  height = dim(sample)[1]
+  width = dim(sample)[2]
+
+  if (height == 1){
+    up = 0
+    down = 0
+  }
+  else if (row_site == 1){
+    up = 0
+    down = sample[row_site + 1,col_site]
+  } 
+  else if (row_site == height) {
+    up = sample[row_site - 1,col_site]
+    down = 0
+  }
+  else {
+    up = sample[row_site - 1,col_site]
+    down = sample[row_site + 1,col_site]
+  }
+  if (width == 1){
+    left = 0
+    right = 0
+  }
+  else if (col_site == 1){
+    left = 0
+    right = sample[row_site, col_site + 1]
+  } 
+  else if (col_site == width) {
+    left = sample[row_site, col_site - 1]
+    right = 0
+  }
+  else {
+    left = sample[row_site, col_site - 1]
+    right = sample[row_site, col_site + 1]
+  }
+  
+  return(c(up, right, down, left))
+}
+
+# Calcul de l'énergie
+
+compute_energy = function(sample){
+  energy = 0
+  height = dim(sample)[1]
+  width = dim(sample)[2]
+  for (i in 1:height){
+    for (j in 1:width){
+      energy = energy + sample[i,j]*sum(get_neighbors(sample, i, j))
+    }
+  }
+  return(energy/2)
+}
+  
+compute_delta_energie = function(sample, row_site, col_site){
+  spin = sample[row_site, col_site]
+  return(2 * spin * sum(get_neighbors(sample, row_site, col_site)))
+}
+
+# Simulation
+
+sim_ising_2D = function(beta, heigth, width, iter) {
+  config = init_ising(heigth, width)
+  print(graph_config(config))
+  for (i in 1:iter) {
+    row = sample(1:heigth, 1)
+    col = sample(1:width, 1)
+    p = 1/(1 + exp(beta * compute_delta_energie(config, row, col)))
+    config[row, col] = sample(c(1,-1), 1, prob = c(p, 1-p))
+  }
+  print(graph_config(config))
+  return(config)
+}
+
+# Graphique 
+
+graph_config = function(config){
+  height = dim(config)[1]
+  width = dim(config)[2]
+  colnames(config) <- paste("Col", 1:width)
+  rownames(config) <- paste("Row", 1:height)
+  df <- melt(config)
+  colnames(df) <- c("x", "y", "value")
+  
+  return(ggplot(df, aes(x = x, y = y, fill = value))
+         + geom_tile() 
+         + coord_fixed()
+         + theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.title.x = element_blank(), axis.title.y = element_blank()))
+}
+
+```
+
+```{r}
+sim_ising_2D(0.5, 15, 15, 100000)
+```
+
+
+
+
 
