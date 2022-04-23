@@ -50,6 +50,8 @@ x & vecteur & rcauchy(100, 0, 1) &  notre échantillon de densité inconnue \\ \
 n & entier & 100 & taille de la simulation \\ \hline
 psi & vecteur & c(0,1) & paramètres de la fonction h \\ \hline
 h & fonction &  & fonction qui retourne $\overline{p_m}(.,\psi)$\\ \hline
+\textbf{Sortie} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
+y & vecteur &  &  notre échantillon simulé \\ \hline
 \end{tabular}
 \end{table}
 
@@ -661,7 +663,56 @@ print(alpha)
 ```{r rev_log_reg ex1}
 print(rev_log_reg(x, alpha, n, c(8,8), pm_barre, 2))
 ```
+Une tentative de la régression logistique inverse sur données gaussiennes, qui fonctionne bien, insensible aux conditions initiales. 
+```{r}
 
+rev_log_reg_gaussien = function(n1,n2,n3){
+  
+  pm1 = function(u){return(exp(-0.5 * ((u)**2)))} #connu
+  pm2 = function(u,theta){return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))} #inconnu normalisation
+  pm3 = function(u,theta){return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))} #inconnu normalisation
+  
+  x1 = rnorm(n1)
+  x2 = rnorm(n2,5,3) # les paramètres sont (2,3) - psi 
+  x3 = rnorm(n3,-2,6) # chi
+  n  = n1+n2+n3
+  
+  ## ATTENTION A BIEN MATCHER LES PARAMETRES PSI ET CHI AVEC LES TIRAGES X1,X2 ##
+  psi = c(5,3)
+  chi = c(-2,6) 
+  
+  # calcul des probabilités p_j
+  denom = function(sample, eta) {return(pm1(sample)*exp(eta[1]) + pm2(sample,psi)*exp(eta[2]) + pm3(sample,chi)*exp(eta[3]))}
+  
+  p_1 = function(sample, eta){return (pm1(sample)*exp(eta[1]) / denom(sample, eta))}
+  p_2 = function(sample, eta){return (pm2(sample, psi)*exp(eta[2]) / denom(sample, eta))}
+  p_3 = function(sample, eta){return (pm3(sample, chi)*exp(eta[3]) / denom(sample, eta))}
+  
+  # fonction objectif
+  L = function(eta){return(sum(log(p_1(x1, eta))) + sum(log(p_2(x2, eta))) + sum(log(p_3(x3, eta))))}
+  
+  # initialisation descente de gradient
+  eta1 =  -log(sd(x1)*sqrt(2*pi)) + log(n1/n) +100
+  eta2 =  -log(sd(x2)*sqrt(2*pi)) + log(n2/n) +34
+  eta3 =  -log(sd(x3)*sqrt(2*pi)) + log(n3/n) -45
+  
+  # optimisation
+  eta = optim(par = c(eta1,eta2,eta3),gr = "CG",control = list(fnscale=-1),fn = L)$par
+  
+  constante_additive = eta[1] + log(sqrt(2*pi)) - log(n1/n)
+  a = exp(-eta[1] + log(n1/n) + constante_additive) #valeur témoin / vrai valeur connue = 1
+  b = exp(-eta[2] + log(n2/n) + constante_additive) # normlisation de linconnu
+  c = exp(-eta[3] + log(n3/n) + constante_additive) # normlisation de linconnu
+  
+  x = c(a,b,c,constante_additive)
+  
+  return (x)
+}
+
+
+rev_log_reg_gaussien(100000,100000,100000)
+c(sqrt(2*pi*1),sqrt(2*pi*9),sqrt(2*pi*36)) # pour comparer a,b,c aux vraies constantes de normalisations
+```
 Etude de l'impact de la dimension, du ratio et des paramètres sur la convergence de la constante.
 
 ```{r eval=FALSE, include=FALSE}
