@@ -1048,11 +1048,24 @@ pm_barre_ising = function(samples, theta){
   return(exp(-theta[1] * energie))
 }
 
+log_pm_ising = function(samples, theta){
+  # theta[1] = beta
+  # theta[2] = -log(Z)
+  m = dim(samples)[1] / height
+  samples_split = split(samples, as.factor(1:m))
+  energie = sapply(samples_split, compute_energy, height, width) 
+  return(-theta[1] * energie + theta[2])
+}
+
 pn_discr_unif_2D = function(samples, param){
   # param[1] = height
   # param[2] = width
   samples = matrix(t(samples), ncol = param[1] * param[2], byrow = TRUE)
   return(rowProds(ifelse(samples == -1, 1/2, ifelse(samples == 1, 1, 0))))
+}
+
+log_pm_discr_unif_2D = function(samples){
+  return(log(pn_discr_unif_2D(samples, c(height, width))))
 }
 ```
 
@@ -1096,6 +1109,12 @@ rev_log_reg_with_noise(x, samples_unif_2D, n, c(beta), c(height, width), pm_barr
 
 # résultat du package GiRaf
 NC.mrf(height, width, beta)
+```
+```{r}
+# ------- NCE --------------------------------------------------------------------------#
+
+nce(x, samples_unif_2D, c(height, width), log_pm_ising, log_pm_discr_unif_2D, 2, n)
+
 ```
 
 
