@@ -25,12 +25,14 @@ library(knitr)
 library(moments) 
 library(tseries)
 library(readr)
+library(Rcpp)
+
 ```
 
 ```{r include=FALSE}
 # Palettes
 
-pal5 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#E1AF00", "#DC863B")
+pal5 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#DC863B", "#E1AF00")
 pal4 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#DC863B")
 pal2 = c("#3B9AB2", "#DC863B")
 pal3 = c("#3B9AB2", "#EBCC2A", "#DC863B")
@@ -179,9 +181,6 @@ nce = function(x, law_y, params_y, log_pm, log_pn, size_theta, n){
   
   return(c(theta[-size_theta], exp(-theta[size_theta])))
 }
-
-nce(x, sim_multivar_dis_unif, list(nb_spins,-1,1), log_pm_ising, log_pn_multivar_dis_unif, 2, n)
-
 ```
 
 \subsection{Graphiques}
@@ -189,15 +188,23 @@ nce(x, sim_multivar_dis_unif, list(nb_spins,-1,1), log_pm_ising, log_pn_multivar
 Utilité : afficher l'histogramme pour un échantillon de données $x$.
 
 ```{r print_hist}
+
+png('hist.png', units="cm", width=15, height=11, res=300)
+
 print_hist = function(x) {
   df = data.frame(x = x)
   hist_x = ggplot(df, aes(x=x)) + 
-           geom_histogram(aes(y = stat(count)/sum(count)), bins = 20, color="white") + 
-           theme(aspect.ratio = 1) + 
-           labs(y = "Fréquence") + 
-           ggtitle("Distribution de l'échantillon x")
+           geom_histogram(aes(y = ..density..), bins = 20, color="white", fill = "grey") + 
+           labs(y = "Fréquence") +
+           stat_function(fun = dcauchy, args = list(location = mean(df$x), scale = sd(df$x)), size = 1, aes(colour = "Cauchy")) +
+           scale_colour_manual("Densité du bruit :", values=c(pal2[1]), labels = expression(Cauchy(m[emp],sd[emp]))) +
+           theme(legend.position="bottom", legend.box="vertical", legend.margin=margin())
   print(hist_x)
 }
+print_hist(rnorm(10000,2,4))
+
+dev.off
+
 ```
 
 Utilité : pour NCE, afficher l'évolution des paramètres au fur et à mesure de l'augmentation de n (la dimension de l'échantillon de bruit)
@@ -308,7 +315,11 @@ df_mcmle_filt = subset(df_mcmle, param_2 <= 6 & param_2 >= 0 & param_1 >= -2 & p
 ```
 
 ```{r graph mc mle cv}
-ggplot(df_mcmle_filt, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point() + scale_color_manual(values = pal2)
+#png('df_mcmle.png', units="cm", width=15, height=11, res=300)
+
+ggplot(df_mcmle_filt, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point(size = 2) + scale_color_manual(values = pal2) + labs(shape="Ratio (n/m) : ", col="Taille de l'échantillon (m) : ") + xlab(expression(mu)) + ylab(expression(sigma)) + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + geom_vline(xintercept = 2, linetype="dotted") + geom_hline(yintercept = 4, linetype="dotted")
+
+#dev.off()
 ```
 
 Etudions l'impact du choix de $\psi$ sur la convergence des estimateurs.
@@ -320,7 +331,7 @@ colnames(df_mcmle_psi) = c("param_1", "param_2", "ratio_alpha_psi")
 x = rnorm(10000, 2, 4)
 for (r in c(1,3,5,7)){
   for (i in 1:100) {
-     df_mcmle_psi[nrow(df_mcmle_psi) + 1, ] = c(mc_mle(x, 10000, c(2*r, 4*r), pm_barre), r)
+     df_mcmle_psi[nrow(df_mcmle_psi) + 1, ] = c(mc_mle(x, 100000, c(2*r, 4*r), pm_barre), r)
   }
 }
 write.csv(df_mcmle_psi, "df_mcmle_psi.csv")
@@ -333,8 +344,15 @@ df_mcmle_psi <- read_csv("df_mcmle_psi.csv")[,-1]
 
 df_mcmle_psi = df_mcmle_psi[order(-df_mcmle_psi$ratio_alpha_psi),]
 
+lab = list(bquote(psi == "(2,4)"), bquote(psi == "(6,12)"), bquote(psi == "(10,20)"), bquote(psi == "(14,28)"))
+
 df_mcmle_psi$ratio_alpha_psi = as.factor(df_mcmle_psi$ratio_alpha_psi)
-ggplot(df_mcmle_psi, aes(x = param_1, y = param_2, color = ratio_alpha_psi)) + geom_point() + scale_color_manual(values = pal5)
+
+#png('df_mcmle_psi.png', units="cm", width=15, height=11, res=300)
+
+ggplot(df_mcmle_psi, aes(x = param_1, y = param_2, color = ratio_alpha_psi)) + geom_point(size = 2) + scale_color_manual(values = pal4, labels = lab) + labs(col=" ") + xlab(expression(mu)) + ylab(expression(sigma)) + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + geom_vline(xintercept = 2, linetype="dotted") + geom_hline(yintercept = 4, linetype="dotted")
+
+#dev.off()
 ```
 
 \subsection{Méthode NCE}
@@ -376,11 +394,19 @@ df_nce$const_error = abs(df_nce$const - 4*sqrt(2*pi))
 ```
 
 ```{r graph nce params}
-ggplot(df_nce, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point() + scale_color_manual(values = pal3)
+#png('df_nce.png', units="cm", width=15, height=11, res=300)
+
+ggplot(df_nce, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point(size = 2) + scale_color_manual(values = pal3) + labs(shape="Ratio (n/m) : ", col="Taille de l'échantillon (m) : ") + xlab(expression(mu)) + ylab(expression(sigma)) + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + geom_vline(xintercept = 2, linetype="dotted") + geom_hline(yintercept = 4, linetype="dotted")
+
+#dev.off()
 ```
 
 ```{r graph nce const}
-ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + geom_boxplot() + scale_color_manual(values = pal2)
+#png('df_nce_const.png', units="cm", width=15, height=11, res=300)
+
+ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + geom_boxplot() + scale_color_manual(values = pal2) + labs(col="Ratio (n/m) : ") + xlab("Taille de l'échantillon (m)") + ylab("Erreur")
+
+#dev.off()
 ```
 
 
@@ -456,16 +482,15 @@ Utilité : améliorer récursivement la précision de l'estimation via les estim
 
 ```{r mc_mle_recursif, eval=FALSE, include=FALSE}
 m = 10000
-n = 10000
+n = 100000
 x = rnorm(m, 2, 4)
-psi = c(mean(x),sd(x))
+psi = c(20,20)
 
 df_recurs_naif = data.frame(matrix(ncol = 3, nrow = 0))
 colnames(df_recurs_naif) = c("iteration", "param_1", "param_2")
 
-for (i in 1:100) {
+for (i in 1:30) {
   y = hasting(x, n, psi, pm_barre)
-  df_recurs_naif[nrow(df_recurs_naif) + 1, ] = c(i, psi)
 
   L = function(theta){
     return(sum(log(pm_barre(x,theta)/pm_barre(x,psi))) - m*log(mean(pm_barre(y,theta)/pm_barre(y,psi))))
@@ -477,9 +502,11 @@ for (i in 1:100) {
     control = list(fnscale=-1),
     fn = L
   )$par
+  
+  df_recurs_naif[nrow(df_recurs_naif) + 1, ] = c(i, psi)
 }
 
-write.csv(df_recurs_naif, "df_recurs_naif.csv")
+write.csv(df_recurs_naif, "df_recurs_naif2.csv")
 ```
 
 ```{r graph point mc mle recur, message = FALSE}
@@ -488,11 +515,17 @@ ggplot(df_recurs_naif, aes(x = param_1, y = param_2, color = iteration)) + geom_
 ```
 
 ```{r graph lines mc mle recur, message = FALSE}
-df_recurs_naif <- read_csv("df_recurs_naif.csv")[,-1]
+df_recurs_naif <- read_csv("df_recurs_naif2.csv")[,-1]
 colnames(df_recurs_naif) = c("iteration", "param_1", "param_2")
 
+lab = list(bquote(mu), bquote(sigma))
+
+png('df_recurs_naif.png', units="cm", width=15, height=11, res=300)
+
 df_recurs_naif_melted = melt(df_recurs_naif, id.vars = "iteration")
-ggplot(df_recurs_naif_melted, aes(x = iteration, y = value)) + geom_line(aes(color = variable, group = variable)) + scale_color_manual(values = pal2)
+ggplot(df_recurs_naif_melted, aes(x = iteration, y = value)) + geom_line(aes(color = variable, group = variable)) + scale_color_manual(values = pal2, labels = lab) + labs(col=" ") + ylab("Valeurs des paramètres") + xlab("Itérations") + geom_hline(yintercept = 2, linetype="dotted") + geom_hline(yintercept = 4, linetype="dotted")
+
+dev.off()
 ```
 Cette approche naïve n'améliore pas la précision de notre estimation. 
 
@@ -673,7 +706,7 @@ rev_log_reg_gaussien = function(n1,n2,n3){
   pm3 = function(u,theta){return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))} #inconnu normalisation
   
   x1 = rnorm(n1)
-  x2 = rnorm(n2,5,3) # les paramètres sont (2,3) - psi 
+  x2 = rnorm(n2,5,3) # les paramètres sont (5,3) - psi 
   x3 = rnorm(n3,-2,6) # chi
   n  = n1+n2+n3
   
@@ -785,11 +818,12 @@ rev_log_reg_with_noise = function(x, law_noise, n, alpha, psi, h1, h2){
     fn = L
   )$par
   
-  b = exp(-const[2] + log(m/(m+n)))
-  a = exp(-const[1] + log(m/(m+n)))
+  constante_additive = const[2] + log(1) - log(n/(n+m))
   
-  # la constante de h_2 vaut normalement 1 si h_2 est une loi de densité, donc b est exactement le coefficent de proportionalité
-  return(a/b*m/n)
+  b = exp(-const[2] + log(n/(m+n)) + constante_additive)
+  a = exp(-const[1] + log(m/(m+n)) + constante_additive)
+  
+  return(a)
 }
 ```
 
@@ -802,14 +836,22 @@ pn_cauchy = function(u, psi){
   return(dcauchy(u, psi[1], psi[2]))
 }
 
+pn_norm = function(u, psi){
+  return(dnorm(u, psi[1], psi[2]))
+}
+
+pn_unif = function(u, psi){
+  return(dunif(u, psi[1], psi[2]))
+}
+
 m = 1000
 n = 10000
 x = rnorm(m,2,4)
 psi = c(mean(x), sd(x))
 
-alpha = mc_mle(x, n, psi, pm_barre)
-print(alpha)
+#alpha = mc_mle(x, n, psi, pm_barre)
 ```
+
 ```{r}
 rev_log_reg_with_noise(x, rcauchy, n, c(2,4), c(mean(x),sd(x)), pm_barre, pn_cauchy)
 ```
@@ -825,23 +867,23 @@ alpha = c(2,4)
 for (m in M){
   x = rnorm(m, 2, 4)
   for (n in N) {
-    for (i in 1:1000) {
-       df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, rcauchy, n*m, alpha, alpha, pm_barre, dcauchy), m, n, "cauchy")
+    for (i in 1:100) {
+       df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, rcauchy, n*m, alpha, alpha, pm_barre, pn_cauchy), m, n, "cauchy")
     }
-    for (i in 1:1000) {
-       df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, rnorm, n*m, alpha, alpha, pm_barre, dnorm), m, n, "normale")
+    for (i in 1:10) {
+       df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, rnorm, n*m, alpha, alpha, pm_barre, pn_norm), m, n, "normale")
     }
-    for (i in 1:1000) {
-       df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, runif, n*m, alpha, c(min(x),max(x)), pm_barre, dunif), m, n, "unif")
+    for (i in 1:10) {
+       df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, runif, n*m, alpha, c(min(x),max(x)), pm_barre, pn_unif), m, n, "unif")
     }
   }
 }
 
-write.csv(df_rev_log_reg_noise, "df_rev_log_reg_noise.csv")
+write.csv(df_rev_log_reg_noise, "df_rev_log_reg_noise2.csv")
 ```
 
 ```{r message = FALSE}
-df_rev_log_reg_noise <- read_csv("df_rev_log_reg_noise.csv")[,-1]
+df_rev_log_reg_noise <- read_csv("df_rev_log_reg_noise2.csv")[,-1]
 
 df_rev_log_reg_agg = aggregate(const ~ size_data + ratio_noise_data + law_noise,
                     data = df_rev_log_reg_noise,
