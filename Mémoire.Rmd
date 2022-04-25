@@ -26,7 +26,7 @@ library(moments)
 library(tseries)
 library(readr)
 library(Rcpp)
-
+library(GiRaF)
 ```
 
 ```{r include=FALSE}
@@ -1074,9 +1074,6 @@ x = samples_ising_2D(beta, height, width, burn_in, epsilon, m)
 graph_config(x[1:15,])
 ```
 
-```{r}
-rev_log_reg_with_noise(samples, samples_unif_2D, n, c(beta), c(height, width), pm_barre_ising, pn_discr_unif_2D)
-```
 
 ```{r}
 #------- MC MLE --------------------------------------------------------------------#
@@ -1091,7 +1088,15 @@ L = function(theta){ return(sum(log(pm_barre_ising(x,theta)/pm_barre_ising(x,c(p
 theta = optim( par = c(1, 1), gr = 'CG', control = list(fnscale=-1), fn = L)$par[1]
 ```
 
+```{r}
+#------ Régression logistique inverse ----------------------------------------------#
 
+# notre application
+rev_log_reg_with_noise(x, samples_unif_2D, n, c(beta), c(height, width), pm_barre_ising, pn_discr_unif_2D)
+
+# résultat du package GiRaf
+NC.mrf(height, width, beta)
+```
 
 
 
