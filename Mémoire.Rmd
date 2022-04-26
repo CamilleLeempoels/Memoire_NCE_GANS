@@ -34,8 +34,10 @@ library(GiRaF)
 
 pal5 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#DC863B", "#E1AF00")
 pal4 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#DC863B")
-pal2 = c("#3B9AB2", "#DC863B")
 pal3 = c("#3B9AB2", "#EBCC2A", "#DC863B")
+pal2 = c("#3B9AB2", "#DC863B")
+
+pal2_bis = c("#3B9AB2", "#EBCC2A")
 
 ```
 
@@ -909,8 +911,8 @@ On a $p = \frac{1}{1 + exp(\beta \Delta H)}$ avec $\Delta H = 2\sigma_j\sum_j\si
 
 ```{r}
 # Simuler une matrice uniforme
-sim_unif_2D = function(heigth, width){
-  return(matrix(sample(c(-1,1), heigth * width, replace=T), ncol = width))
+sim_unif_2D = function(height, width){
+  return(matrix(sample(c(-1,1), height * width, replace=T), ncol = width))
 }
 
 # Empiler verticalement plusieurs matrices uniformes
@@ -967,7 +969,7 @@ compute_energy = function(sample, height, width){
   energy = 0
   for (i in 1:height){
     for (j in 1:width){
-      energy = energy + sample[i,j]*sum(get_neighbors(sample, i, j))
+      energy = energy - sample[i,j]*sum(get_neighbors(sample, i, j))
     }
   }
   return(energy/2)
@@ -980,10 +982,10 @@ compute_delta_energie = function(sample, row_site, col_site){
 
 # Simulation
 
-sim_ising_2D = function(beta, heigth, width, iter, init) {
+sim_ising_2D = function(beta, height, width, iter, init) {
   config = init
   for (i in 1:iter) {
-    row = sample(1:heigth, 1)
+    row = sample(1:height, 1)
     col = sample(1:width, 1)
     p = 1/(1 + exp(beta * compute_delta_energie(config, row, col)))
     config[row, col] = sample(c(1,-1), 1, prob = c(p, 1-p))
@@ -998,36 +1000,40 @@ graph_config = function(config){
   width = dim(config)[2]
   colnames(config) <- paste("Col", 1:width)
   rownames(config) <- paste("Row", 1:height)
-  df <- melt(config)
+  df <- melt(t(config))
   colnames(df) <- c("x", "y", "value")
   
-  return(ggplot(df, aes(x = x, y = y, fill = value))
+  return(ggplot(df, aes(x = x, y = y, fill = factor(value)))
          + geom_tile() 
          + coord_fixed()
-         + theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.title.x = element_blank(), axis.title.y = element_blank()))
+         + scale_fill_manual(values=pal2_bis)
+         + labs(col="Spins : ")
+         + theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.title.x = element_blank(), axis.title.y = element_blank())
+         + theme(legend.position = "none")
+         )
 }
 ```
 
 On va générer un échantillon de $m$ configurations distribuées selon un modèle d'Ising en 2D. Le résultat sera présenté sous la forme d'une matrice verticale où seront empilées les configurations.
 
 ```{r}
-samples_ising_2D = function(beta, heigth, width, burn_in, epsilon, m){
+samples_ising_2D = function(beta, height, width, burn_in, epsilon, m){
   # beta : paramètre du modèle
-  # heigth, width : taille d'une configuration
+  # height, width : taille d'une configuration
   # burn_in : nombre d'itérations pour atteindre la stationnarité
   # epsilon : pas de décorrélation pour sélectionner des configs iid
   # m : nombre de configurations dans notre échantillon
   
   # initialisation
-  current_config = init_ising(heigth, width)
+  current_config = init_ising(height, width)
   
   # On effectue des itérations jusqu'à atteindre supposément l'état stationnaire
-  current_config = sim_ising_2D(beta, heigth, width, burn_in, current_config)
+  current_config = sim_ising_2D(beta, height, width, burn_in, current_config)
   samples = current_config
   
   # Une fois la stationnarité atteinte, on prend un échantillon tous les epsilon pas afin que nos échantillons soient iid
   for (i in 2:m){
-    current_config = sim_ising_2D(beta, heigth, width, epsilon, current_config)
+    current_config = sim_ising_2D(beta, height, width, epsilon, current_config)
     samples = rbind(samples, current_config)
   }
   
@@ -1073,8 +1079,8 @@ log_pm_discr_unif_2D = function(samples){
 ```{r}
 #---- Constantes pour l'application numérique ----#
 beta = 0.5
-width = 15
-height = 15
+width = 20
+height = 10
 burn_in = 100000
 epsilon = 100
 m = 1000
@@ -1084,7 +1090,33 @@ x = samples_ising_2D(beta, height, width, burn_in, epsilon, m)
 ```
 
 ```{r}
-graph_config(x[1:15,])
+# Graphiques pour visualiser l'évolution de la chaine de markov durant la période de chauffe
+
+
+#png('ising_init.png', units="cm", width=7, height=4, res=300)
+test1 = matrix(rep(-1, height*width), ncol = width)
+graph_config(test1)
+#dev.off()
+
+#png('ising_iter100.png', units="cm", width=7, height=4, res=300)
+test2 = sim_ising_2D(beta, height, width, 100, test1)
+graph_config(test2)
+#dev.off()
+
+#png('ising_iter1000.png', units="cm", width=7, height=4, res=300)
+test3 = sim_ising_2D(beta, height, width, 900, test2)
+graph_config(test3)
+#dev.off()
+
+#png('ising_iter10000.png', units="cm", width=7, height=4, res=300)
+test4 = sim_ising_2D(beta, height, width, 9000, test3)
+graph_config(test4)
+#dev.off()
+
+#png('ising_iter100000.png', units="cm", width=7, height=4, res=300)
+test5 = sim_ising_2D(beta, height, width, 100000, test4)
+graph_config(test5)
+#dev.off()
 ```
 
 
@@ -1098,7 +1130,7 @@ y = samples_ising_2D(psi, height, width, burn_in, epsilon, m)
 L = function(theta){ return(sum(log(pm_barre_ising(x,theta)/pm_barre_ising(x,c(psi)))) - m*log(mean(pm_barre_ising(y,theta)/pm_barre_ising(y,c(psi)))))}
 
 # j'initialise optim avec un paramètre de taille 2 car la dimension 1 ne fonctionne pas avec optim, mais ce n'est pas grave on ne prendra en compte que theta[1]
-theta = optim( par = c(1, 1), gr = 'CG', control = list(fnscale=-1), fn = L)$par[1]
+theta = optim( par = c(1, 1), gr = 'CG', control = list(fnscale=-1), fn = L)$par
 ```
 
 ```{r}
