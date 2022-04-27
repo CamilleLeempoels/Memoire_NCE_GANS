@@ -278,7 +278,7 @@ size_theta = 3
 
 ```{r mc_mle application}
 # METHODE MC MLE
-mc_mle(x, n, c(mean(x),sd(x)), pm_barre)
+mc_mle(x, n, c(10,5), pm_barre)
 ```
 
 Etudions l'impact de la dimension des échantillons sur la convergence des estimateurs.
@@ -452,10 +452,12 @@ dev.off()
 \subsection{Bootstrap}
 
 
-```{r NCE_bootstrap}
+```{r NCE_bootstrap, eval=FALSE, include=FALSE}
 
-# Calcul de {size_boot} estimateurs par bootstrap
-NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size_boot, labels) {
+# NE PAS FAIRE TOURNER
+
+# Calcul de {size_boot} estimateurs par bootstrap pour la méthode NCE
+NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size_boot) {
   m = length(x)
   theta_bootstrap = c()
   x_bootstrap = x
@@ -472,45 +474,70 @@ NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size
   return(matrix(theta_bootstrap, nrow = size_theta))
 }
 
-# Plot la moyenne empirique des estimateurs bootstrap en fonction du nombre d'estimateurs
-NCE_bootstrap_plot = function(matrix_theta_bootstrap) {
-  
-  # Formatage des données pour plot
-  array_boot = 1:length(matrix_theta_bootstrap[1,])
-  df = as.data.frame(cbind(t(rowCumsums(matrix_theta_bootstrap))/array_boot,array_boot))
-  df_melted = melt(df, id.vars = "array_boot")
-  
-  # Plot
-  plot_df = ggplot(df_melted, aes(x = array_boot, y = value)) + 
-  geom_line(aes(color = variable, group = variable)) +
-  labs(title = "Evolution des paramètres par bootstrap", 
-       x = "Taille du bootstrap", 
-       y = "Paramètres", 
-       color = "Légende") +
-  scale_color_manual(labels = labels, values = c("blue", "red", "orange"))
-  print(plot_df)
+# Calcul de {size_boot} estimateurs par bootstrap pour la méthode MC MLE
+MCMLE_bootstrap = function(x, n, psi, pm_barre, size_boot) {
+  m = length(x)
+  theta_bootstrap = c()
+  x_bootstrap = x
+  for (i in 1:size_boot) {
+    theta_bootstrap = append(theta_bootstrap, mc_mle(x_bootstrap, 
+                                                  n, 
+                                                  psi, 
+                                                  pm_barre))
+    x_bootstrap = sample(x, size = m, replace=TRUE)
+  }
+  return(matrix(theta_bootstrap, nrow = 2))
+}
+
+RLI_bootstrap = function(x, law_y, n, alpha, psi, pm_barre, pn_barre, size_boot) {
+  m = length(x)
+  theta_bootstrap = c()
+  x_bootstrap = x
+  for (i in 1:size_boot) {
+    theta_bootstrap = append(theta_bootstrap, rev_log_reg_with_noise(x_bootstrap, 
+                                                  law_y,
+                                                  n, 
+                                                  alpha,
+                                                  psi, 
+                                                  pm_barre,
+                                                  pn_barre))
+    x_bootstrap = sample(x, size = m, replace=TRUE)
+  }
+  return(matrix(theta_bootstrap, nrow = 1))
 }
 
 
 # etude bootstrap de l'estimateur
 bootstrap = function(matrix, alpha){
   return(data.frame(
-    theta = matrix_theta_bootstrap[,1],
-    biais = rowMeans(matrix_theta_bootstrap) - matrix_theta_bootstrap[,1],
-    IC = rowQuantiles(matrix_theta_bootstrap, probs = c(alpha/2, 1-alpha/2))
+    theta = matrix[,1],
+    biais = rowMeans(matrix) - matrix[,1],
+    IC = rowQuantiles(matrix, probs = c(alpha/2, 1-alpha/2))
   ))
 }
 
+
+m = 10000
+ratio = 10
+n = m * ratio
+size_boot = 100
+x = rnorm(m,2,4)
+alpha = c(2,4)
+psi = c(mean(x), sd(x))
+
+df_nce_bootstrap = NCE_bootstrap(x_test, rcauchy, psi, log_pm, log_pn_cauchy, 3, n, size_boot)
+write.csv(as.data.frame(df_nce_bootstrap), "dataframes/df_nce_bootstrap.csv")
+
+df_mcmle_bootstrap = MCMLE_bootstrap(x, n, psi, pm_barre, size_boot)
+write.csv(as.data.frame(df_mcmle_bootstrap), "dataframes/df_mcmle_bootstrap.csv")
+
+df_rli_bootstrap = RLI_bootstrap(x, rcauchy, n, alpha, psi, pm_barre, pn_cauchy, size_boot)
+write.csv(as.data.frame(df_rli_bootstrap), "dataframes/df_rli_bootstrap.csv")
 ```
 
-```{r test_NCE_bootstrap}
-x_test = rnorm(1000,2,4)
-
-matrix_theta_bootstrap = NCE_bootstrap(x_test, rcauchy, c(mean(x_test),sd(x_test)), log_pm, log_pn_cauchy, 3, 1000, 10, c("mu", "sigma", "exp(-c)"))
-
-kable(bootstrap(matrix_theta_bootstrap, 0.05))
+```{r}
+kable(bootstrap(df_nce_bootstrap, 0.05))
 ```
-
 
 
 \subsection{Récursivité}
@@ -859,12 +886,12 @@ rev_log_reg_with_noise = function(x, law_noise, n, alpha, psi, h1, h2){
     fn = L
   )$par
   
-  constante_additive = const[2] + log(1) - log(n/(n+m))
+  constante_additive = const[1] + log(512) - log(1/2)
   
   b = exp(-const[2] + log(n/(m+n)) + constante_additive)
   a = exp(-const[1] + log(m/(m+n)) + constante_additive)
   
-  return(a)
+  return(c(a,b,const[1],const[2], log(0.5), log(512) - log(0.5), constante_additive))
 }
 ```
 
@@ -959,7 +986,7 @@ sim_unif_2D = function(height, width){
 
 # Empiler verticalement plusieurs matrices uniformes
 samples_unif_2D = function(n, height, width){
-  return(init_ising(n * height, width))
+  return(sim_unif_2D(n * height, width))
 }
 
 # Sélection des voisins, dans l'ordre haut - droite - bas - gauche
@@ -1067,7 +1094,7 @@ samples_ising_2D = function(beta, height, width, burn_in, epsilon, m){
   # m : nombre de configurations dans notre échantillon
   
   # initialisation
-  current_config = init_ising(height, width)
+  current_config = sim_unif_2D(height, width)
   
   # On effectue des itérations jusqu'à atteindre supposément l'état stationnaire
   current_config = sim_ising_2D(beta, height, width, burn_in, current_config)
@@ -1088,12 +1115,11 @@ samples_ising_2D = function(beta, height, width, burn_in, epsilon, m){
 On définit les fonctions $p_n$, $p_m$, etc, pour l'application des méthodes MCMLE, Régression logistique inverse, NCE.
 
 ```{r}
-pm_barre_ising = function(samples, theta){
-  # theta[1] = beta
+pm_barre_ising = function(samples, alpha){
   m = dim(samples)[1] / height
   samples_split = split(samples, as.factor(1:m))
   energie = sapply(samples_split, compute_energy, height, width) 
-  return(exp(-theta[1] * energie))
+  return(exp(-alpha * energie))
 }
 
 log_pm_ising = function(samples, theta){
@@ -1109,10 +1135,11 @@ pn_discr_unif_2D = function(samples, param){
   # param[1] = height
   # param[2] = width
   samples = matrix(t(samples), ncol = param[1] * param[2], byrow = TRUE)
-  return(rowProds(ifelse(samples == -1, 1/2, ifelse(samples == 1, 1, 0))))
+  return(rowProds(ifelse(samples == -1, 1/2, ifelse(samples == 1, 1/2, 0))))
+  #return(1/(2)^(param[1]*param[2]))
 }
 
-log_pm_discr_unif_2D = function(samples){
+log_pn_discr_unif_2D = function(samples){
   return(log(pn_discr_unif_2D(samples, c(height, width))))
 }
 ```
@@ -1120,15 +1147,16 @@ log_pm_discr_unif_2D = function(samples){
 
 ```{r}
 #---- Constantes pour l'application numérique ----#
-beta = 0.5
+beta = 0
+psi = 0.5
 width = 20
 height = 10
 burn_in = 100000
 epsilon = 100
 m = 1000
 n = 1000
-init = sim_unif_2D(height, width)
 x = samples_ising_2D(beta, height, width, burn_in, epsilon, m)
+y = samples_ising_2D(psi, height, width, burn_in, epsilon, n)
 ```
 
 ```{r}
@@ -1161,382 +1189,70 @@ graph_config(test5)
 #dev.off()
 ```
 
-
 ```{r}
 #------- MC MLE --------------------------------------------------------------------#
 
-psi = 0.8
-y = samples_ising_2D(psi, height, width, burn_in, epsilon, m)
-
 # Fonction objectif
-L = function(theta){ return(sum(log(pm_barre_ising(x,theta)/pm_barre_ising(x,c(psi)))) - m*log(mean(pm_barre_ising(y,theta)/pm_barre_ising(y,c(psi)))))}
+L = function(alpha){ return(sum(log(pm_barre_ising(y,psi)/pm_barre_ising(y,alpha))) - m*log(mean(pm_barre_ising(x,psi)/pm_barre_ising(x,alpha))))}
 
-# j'initialise optim avec un paramètre de taille 2 car la dimension 1 ne fonctionne pas avec optim, mais ce n'est pas grave on ne prendra en compte que theta[1]
-theta = optim( par = c(1, 1), gr = 'CG', control = list(fnscale=-1), fn = L)$par
+optimize(L, c(0,1), maximum = TRUE)$maximum
 ```
 
 ```{r}
 #------ Régression logistique inverse ----------------------------------------------#
 
-# notre application
-rev_log_reg_with_noise(x, samples_unif_2D, n, c(beta), c(height, width), pm_barre_ising, pn_discr_unif_2D)
+# calcul des probabilités p_j
+denom = function(sample, eta) {
+  return(pm_barre_ising(sample, beta)*exp(eta[1]) + pn_discr_unif_2D(sample,c(height, width))*exp(eta[2]))}
+p_1 = function(sample, eta){
+  return (pm_barre_ising(sample, beta)*exp(eta[1]) / denom(sample, eta))}
+p_2 = function(sample, eta){
+  return (pn_discr_unif_2D(sample, c(height, width))*exp(eta[2]) / denom(sample, eta))}
 
-# résultat du package GiRaf
-NC.mrf(height, width, beta)
+# fonction objectif
+L = function(eta) {
+  return(sum(log(p_1(x, eta))) + sum(log(p_2(y, eta))))}
+
+# initialisation descente de gradient
+eta1 = -log(sd(x)*sqrt(2*pi)) + log(m/(m+n))
+eta2 = -log(sd(y)*sqrt(2*pi)) + log(n/(m+n))
+
+# optimisation
+const = optim(
+  par = c(eta1,eta2),
+  gr = "CG",
+  control = list(fnscale=-1),
+  fn = L
+)$par
+
+# calcul de la constante
+constante_additive = const[2] + log(1) - log(n/(m+n))
+exp(-const[1] + log(m/(m+n)) + constante_additive)
 ```
+
 ```{r}
 # ------- NCE --------------------------------------------------------------------------#
 
-nce(x, samples_unif_2D, c(height, width), log_pm_ising, log_pm_discr_unif_2D, 2, n)
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-\newpage
-\newpage
-\section{Anciennes versions du code pour Ising}
-
-\subsection{Simulation en 1D (première approche)}
-
-```{r eval=FALSE}
-# temps estimé 1min n=500, iter=100k
-library('isingLenzMC')
-
-sim_ising_1D = function(beta, nb_spins, nb_config){
-  config  = rep(1,n) 
-  data = matrix(nrow = iter, ncol = n)
-  data[1, ] = config
-  for (k in 2:iter){
-    data[k,] = isStep1D(beta, config, 1.0, 0.0, 1)$vec # tirage avec Metropolis
+h = function(u, theta){
+    return( 1 / (1 + n/m * exp(log_pn_discr_unif_2D(u) - log_pm_ising(u, theta))))
   }
-  return(data)
-}
-
-beta    = 0.9             # paramètre de temperature 
-n       = 500             # nombre de sites
-config  = rep(1,n)        # generer une configuration à n sites
-config1 = genConfig1D(n)  # generer une configuration à n sites aléatoirement
-
-energie = c()
-iter = 10000
-data = matrix(nrow= iter, ncol = n)
-
-for (k in 1:iter){
-  # on tire successivement des configurations jusqu'à obtenir convergence du niveau d'énergie
-  #ce que l'on observera graphiquement
-  config = isStep1D(beta, config, 1.0, 0.0, 1)$vec # tirage avec Metropolis
-  data[k,] = config
-  energie   = c(energie,totalEnergy1D(config,1.0,0.0))
-}
-plot(energie, type ='l')
-```
-
-
-On définit la fonction $coeur$ qui est à une constante de normalisation près la mesure de Gibbs associée à au modèle d'Ising de paramètre $\beta$.
-On définit la fonction $ising1D(n)$ qui est rend toutes les configurations de spins possibles d'un modèle d'Ising unidimensionnel à $n$ sites. 
-
-```{r eval=FALSE}
-coeur = function(constante_normalisation,beta=0.9,config){
-  
-  # constante_normalisation :  fonction de partition inconnue
-  # beta                    :  paramètre de température 
-  # config                  :  une configuration de spins
-  
-  # Lorsque 'constante_normalisation' == vraie valeur de la fonction de partition pour le paramètre beta 
-  #       alors return la probabilité de la configuration de spins 'config'
-  
-  return ( exp(-beta*totalEnergy1D(config,1.0,0.0))/constante_normalisation )
-}
-  
-ising1D = function(n){
-
-  # n : nombre de sites pour une configuration
-  
-  # return l'ensemble des configuration 1D possibles dans une matrice
-  # chaque ligne correspond à une configuration possible
-  
-  if (n==1)
-    {
-    return(matrix(c(1,-1),nrow=2))
-    }
-  else
-    {
-    return(cbind( rbind(ising1D(n-1),ising1D(n-1)), c(rep(1, 2**(n-1)), rep(-1,2**(n-1)))))
-    }
-}
-
-```
-
-```{r eval=FALSE}
-# un petit test de ce qu'on fait
-
-n       = 15   # nombre de sites 
-config  = ising1D(n) # ensemble des configurations 1D à n sites
-beta    = 0.9 # paramètre de température
-energie = c()
-
-for (k in 1:2**n){ energie = c(energie,totalEnergy1D(c(config[k,]), 1, 0) ) } # totalEnergy1D(config[k,], 1, 0), 1 interraction voisins, 0 champs ext
-
-cst_normalisation  = sum(exp(-beta*energie))
-
-proba  = 0
-for (k in 1:2**n){ proba = proba + coeur(cst_normalisation,beta=0.9,config[k,]) }
-(proba)
-print("if proba = 1, then it is good")
-```
-
-Il se peut qu'il y ait conflit de notations pour cette sous section d'Ising avec les notations du précédent exemple.
-De plus, il y'a une erreur en sortie que je n'arrive pas résoudre pour l'instant. Mais je ne pense pas qu'elle soit très compliquée...
-
-```{r eval=FALSE}
-log_pn = function(u,param_pn){
-  # pn densite iid N(param_pn[1],param_pn[2]) de dim length(u) 
-  # Verifier que c'est bien ce qui est codé
-  n     = length(u)
-  log_d = 0 
-  for (k in 1:n){ log_d = log_d - 0.5 * ((u[k] - param_pn[1]) / param_pn[2]) ** 2 }
-  return(-0.5*n*log(2*pi*(param_pn[2]**2)) + log_d)
-}
-
-log_pm = function(configuration,beta,theta){
-  # theta = -log(Z)
-  # interraction entre sites = 1 et avec le champs extérieure = 0
-  return ( -beta*totalEnergy1D(configuration,1,0) + theta )
-}
-
-
-nce_ising = function(matrix_ising,beta,log_pm,theta,law_pn,param_pn,log_pn,b_size){
-  # matrix_ising = matrice ou en ligne sont rangées les observations d'Ising en 1D
-  # beta         = paramètre de température de modèle d'Ising \in ]0,1[
-  # log_pm       = logarithme de la densité d'Ising
-  # theta        = paramètre à optimiser , en lien avec la constante de normalisation
-  
-  # law_pn   = loi du bruit qui doit contenir dans son support {0,1}
-  # param_pn = paramètres de la loi law_pn
-  # log_pn   = log de la densité de pn
-  
-  # b_size  = nombre d'observation du bruit, à ne pas confondre avec la taille d'une observation du bruit qui est fixée à n
-  
-  n     = dim(matrix_ising)[2] # n = nombre de sites pour les observations d'Ising en 1D
-  m     = dim(matrix_ising)[1] # m = nombre d'observations d'Ising en 1D
-  
-  bruit = matrix(do.call(law_pn,c(list(b_size*n),param_pn)),ncol=n) # échantillon de vecteurs de bruit disposé en matrice, ligne par ligne
-  
-  h = function(configuration,theta){return( 1 / (1 + b_size/m * exp(log_pn(configuration,param_pn) - log_pm(configuration,beta,theta))))}
   
   J = function(theta){
-    # x vecteur de densite inconnue 
-    # y vecyeur de bruit 
-    objectif = 0
-    for (k in 1:m){objectif = objectif + log(h(matrix_ising[k,],theta)) }   # composante de l'objectif liée aux données
-    for (k in 1:b_size){objectif = objectif + log(1 - h(bruit[k,],theta)) } # composante de l'objectif liée au bruit
-    return( objectif )
-    }
-  
-  solution = optimize(f = J,
-                      interval = c(-1e5,1e5),
-                      maximum  = FALSE)
-  
-  return(exp(-solution))
-}
-
-
-n            = 10
-matrix_ising = ising1D(n)[100:900,]
-beta         = 0.9
-theta        = 1
-law_pn       = rnorm
-param_pn     = c(0,1)
-b_size       = 2**n
-
-nce_ising(matrix_ising,beta,log_pm,theta,law_pn,param_pn,log_pn,b_size)
-```
-
-\subsection{Simulation en 1D (deuxième approche)}
-
-
-```{r eval=FALSE}
-# --------------- Ising ---------------------------------------------------------------------------------------------------------
-
-all_config_ising1D = function(nb_spins){
-  # n : nombre de sites pour une configuration
-  # return l'ensemble des configuration 1D possibles dans une matrice
-  # chaque ligne correspond à une configuration possible
-  
-  if (nb_spins == 1) {
-    return(matrix(c(1,-1),nrow=2))
-  } else {
-    return(cbind(rbind(all_config_ising1D(nb_spins - 1), all_config_ising1D(nb_spins - 1)), c(rep(1,2**(nb_spins - 1)),rep(-1,2**(nb_spins - 1)))))
+    return( sum(log(h(x, theta))) + sum(log(1 - h(y, theta))) )
   }
-}
 
-sim_ising_1D = function(beta, nb_config, nb_spins){
-  config  = rep(1,nb_spins) 
-  data = matrix(nrow = nb_config, ncol = nb_spins)
-  data[1, ] = config
-  data_for_plot = c(config)
-  for (k in 2:nb_config){
-    data[k,] = isStep1D(beta, data[k-1,], 1.0, 0.0, 1)$vec # tirage avec Metropolis
-    data_for_plot = append(data_for_plot, data[k,])
-  }
-  return(data)
-}
-
-graph_ising = function(configs){
-  shape = dim(configs)
-  nb_config = shape[1]
-  nb_spins = shape[2]
+  theta = optim(
+    par = c(0,-138),
+    gr = "CG",
+    control = list(fnscale=-1),
+    fn = J
+  )$par
   
-  valeur_spin = c(t(configs))
-  iterations = rep(1:nb_config, rep(nb_spins, nb_config))
-  id_site = rep(1:nb_spins, nb_config)
-  
-  df = data.frame(valeur_spin, iterations, id_site)
-  return(ggplot(df, aes(iterations, id_site, fill = valeur_spin)) + geom_tile())
-}
-
-calc_energie = function(sim_ising, nb_config){
-  sim_ising_split = split(sim_ising, as.factor(1:nb_config))
-  energie = sapply(sim_ising_split, totalEnergy1D, 1, 0)   # interaction entre sites = 1 et avec le champ extérieur = 0
-  return(energie)
-}
-
-calc_const = function(beta,nb_spins){
-  ens_config = all_config_ising1D(nb_spins) # ensemble des configurations 1D à nb_spins sites
-  energie_total = calc_energie(ens_config, 2**nb_spins)
-  return(sum(exp(-beta*energie_total)))
-}
-
-# --------------- Simulations d'échantillons ------------------------------------------------------------------------------------
-
-sim_multivar_dis_unif = function(nb_samples, size_sample, a, b){
-  return(matrix(sample(c(a,b), nb_samples * size_sample, replace=T), ncol = size_sample))
-}
-
-sim_multivar_cont_unif = function(nb_samples, size_sample, minimum, maximum){
-  return(matrix(runif(nb_samples * size_sample, minimum, maximum), ncol = size_sample))
-}
-
-
-# --------------- Fonctions pm_barre, pm et pn -----------------------------------------------------------------------------------
-
-log_pm_ising = function(u,theta){
-  # theta[1] = beta
-  # theta[2] = -log(Z)
-  return ( - theta[1] * calc_energie(u, dim(u)[1]) + theta[2] )
-}
-
-pn_multivar_cont_unif = function(u, psi){
-  return(rowProds(dunif(u, -1, 1)))
-}
-
-pn_multivar_dis_unif = function(u, psi){
-  return(rowProds(ifelse(u == -1, 1/2, ifelse(u == 1, 1, 0))))
-}
-
-log_pn_multivar_cont_unif = function(u){
-  return(log(rowProds(dunif(u, -1, 1))))
-}
-
-log_pn_multivar_dis_unif = function(u){
-  return(log(rowProds(ifelse(u == -1, 1/2, ifelse(u == 1, 1, 0)))))
-}
-
-pm_barre_ising = function(u, theta){
-  return(exp(-theta[1] * calc_energie(u, dim(u)[1])))
-}
+  print(c(theta[1], exp(-theta[2])))
 
 ```
-
-
-```{r eval=FALSE}
-
-# ------------- Variables globales -----------------------------------------------------------------------------------------------
-
-beta_alpha = 0.5
-beta_psi = 0.1
-nb_spins = 15
-nb_config = 100000
-x = sim_ising_1D(beta_alpha, nb_config, nb_spins)
-y = sim_ising_1D(beta_psi, nb_config, nb_spins)
-
-#energie_x = calc_energie(x, nb_config)
-#energie_y = calc_energie(y, nb_config)
-
-graph_ising(x)
-graph_ising(y)
-
-# --------------- Calcul numérique de la constante --------------------------------------------------------------------------
-
-#calc_const(beta_alpha, nb_spins)
-
-# --------------- Estimation avec MC MLE ------------------------------------------------------------------------------------
-
-
-#L = function(theta){ return(sum(log(pm_barre_ising(x,theta)/pm_barre_ising(x,psi))) - m*log(mean(pm_barre_ising(y,theta)/pm_barre_ising(y,psi))))}
-
-#theta = optim( par = c(0.9, 1), gr = 'CG', control = list(fnscale=-1), fn = L)$par
-
-
-# --------------- Estimation avec la regression logistique inverse ------------------------------------------------------
-
-rev_log_reg_with_noise(x, sim_multivar_cont_unif, nb_config, c(beta_alpha), list(nb_spins, -1, 1), pm_barre_ising, pn_multivar_cont_unif)
-
-
-# --------------- Estimation avec NCE -----------------------------------------------------------------------------------
-
-#nce(x, sim_multivar_dis_unif, list(nb_spins,-1,1), log_pm_ising, log_pn_multivar_dis_unif, 2, n)
-
+```{r}
+# Constante calculée par le package GiRaf
+NC.mrf(height, width, beta)
 ```
-
-
 
