@@ -264,6 +264,10 @@ log_pn_cauchy = function(u){
   return(log(dcauchy(u, mean(x), sd(x))))
 }
 
+log_pn_unif = function(u){
+  return(log(dcauchy(u, min(x), max(x))))
+}
+
 m = 10000
 n = 10000
 x = rnorm(m, 2, 4)
@@ -357,6 +361,8 @@ ggplot(df_mcmle_psi, aes(x = param_1, y = param_2, color = ratio_alpha_psi)) + g
 nce(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n)
 ```
 
+On étudie l'impact de n et m pour une loi de Cauchy.
+
 ```{r csv nce, eval=FALSE, include=FALSE}
 #NE PAS FAIRE TOURNER CETTE CELLULE, HYPER LONG, IMPORTER LE CSV A LA PLACE
 
@@ -404,6 +410,42 @@ ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + 
 #dev.off()
 ```
 
+Compairason entre un bruit issu d'une loi de Cauchy et un bruit issu d'une loi uniforme.
+
+```{r csv nce, eval=FALSE, include=FALSE}
+#NE PAS FAIRE TOURNER CETTE CELLULE, HYPER LONG, IMPORTER LE CSV A LA PLACE
+
+df_nce_noises = data.frame(matrix(ncol = 4, nrow = 0))
+colnames(df_nce_noises) = c("param_1", "param_2", "const", "law")
+
+m = 10000
+ratio = 10
+n = ratio*m
+
+x = rnorm(m, 2, 4)
+psi = c(min(x), max(x))
+for (i in 1:100) {
+   df_nce_noises[nrow(df_nce_noises) + 1, ] = c(nce(x, runif, psi, log_pm, log_pn_unif, size_theta, n), "uniforme")
+}
+psi = c(mean(x), sd(x))
+for (i in 1:100) {
+   df_nce_noises[nrow(df_nce_noises) + 1, ] = c(nce(x, rcauchy, psi, log_pm, log_pn_cauchy, size_theta, n), "cauchy")
+}
+
+
+write.csv(df_nce_noises, "dataframes/df_nce_noises.csv")
+```
+
+```{r process csv nce noises, include=FALSE}
+df_nce_noises <- read_csv("dataframes/df_nce_noises.csv")[,-1]
+df_nce_noises$const_error = abs(df_nce_noises$const - 4*sqrt(2*pi))
+
+png('df_nce_noises.png', units="cm", width=15, height=11, res=300)
+
+ggplot(df_nce_noises, aes(x = param_1, y = param_2, color = law)) + geom_point(size = 2) + scale_color_manual(values = pal2, labels = c(expression(Cauchy(m[emp],sd[emp])), expression(Uniforme(X[min],X[max])))) + labs(col="Loi du bruit : ") + xlab(expression(mu)) + ylab(expression(sigma)) + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + geom_vline(xintercept = 2, linetype="dotted") + geom_hline(yintercept = 4, linetype="dotted")
+
+dev.off()
+```
 
 \newpage
 \section{Nouvelles approches}
