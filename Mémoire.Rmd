@@ -1034,7 +1034,6 @@ get_neighbors = function(sample, row_site, col_site){
 # Calcul de l'énergie
 
 compute_energy = function(sample, height, width){
-  sample = matrix(sample, ncol = width, nrow = height)
   energy = 0
   for (i in 1:height){
     for (j in 1:width){
@@ -1117,18 +1116,26 @@ On définit les fonctions $p_n$, $p_m$, etc, pour l'application des méthodes MC
 ```{r}
 pm_barre_ising = function(samples, alpha){
   m = dim(samples)[1] / height
-  samples_split = split(samples, as.factor(1:m))
-  energie = sapply(samples_split, compute_energy, height, width) 
-  return(exp(-alpha * energie))
+  energie_for_each_sample = c()
+  for (i in 0:(m-1)){
+    id_beginning_sample = 1+i*height
+    id_end_sample = id_beginning_sample + height - 1
+    energie_for_each_sample = append(energie_for_each_sample, compute_energy(samples[id_beginning_sample:id_end_sample,], height, width))
+  }
+  return(exp(-alpha * energie_for_each_sample))
 }
 
 log_pm_ising = function(samples, theta){
   # theta[1] = beta
   # theta[2] = -log(Z)
   m = dim(samples)[1] / height
-  samples_split = split(samples, as.factor(1:m))
-  energie = sapply(samples_split, compute_energy, height, width) 
-  return(-theta[1] * energie + theta[2])
+  energie_for_each_sample = c()
+  for (i in 0:(m-1)){
+    id_beginning_sample = 1+i*height
+    id_end_sample = id_beginning_sample + height - 1
+    energie_for_each_sample = append(energie_for_each_sample, compute_energy(samples[id_beginning_sample:id_end_sample,], height, width))
+  }
+  return(-theta[1] * energie_for_each_sample + theta[2])
 }
 
 pn_discr_unif_2D = function(samples, param){
@@ -1147,10 +1154,10 @@ log_pn_discr_unif_2D = function(samples){
 
 ```{r}
 #---- Constantes pour l'application numérique ----#
-beta = 0
+beta = 0.5
 psi = 0.5
-width = 20
-height = 10
+width = 5
+height = 5
 burn_in = 100000
 epsilon = 100
 m = 1000
@@ -1193,7 +1200,7 @@ graph_config(test5)
 #------- MC MLE --------------------------------------------------------------------#
 
 # Fonction objectif
-L = function(alpha){ return(sum(log(pm_barre_ising(y,psi)/pm_barre_ising(y,alpha))) - m*log(mean(pm_barre_ising(x,psi)/pm_barre_ising(x,alpha))))}
+L = function(alpha){ return(sum(log(pm_barre_ising(x,alpha)/pm_barre_ising(x,psi))) - m*log(mean(pm_barre_ising(y,alpha)/pm_barre_ising(y,psi))))}
 
 optimize(L, c(0,1), maximum = TRUE)$maximum
 ```
