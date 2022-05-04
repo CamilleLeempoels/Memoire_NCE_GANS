@@ -267,8 +267,8 @@ log_pn_unif = function(u){
   return(log(dcauchy(u, min(x), max(x))))
 }
 
-m = 1000
-n = 1000
+m = 10000
+n = 10000
 x = rnorm(m, 2, 4)
 size_theta = 3
 ```
@@ -411,7 +411,7 @@ ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + 
 
 Compairason entre un bruit issu d'une loi de Cauchy et un bruit issu d'une loi uniforme.
 
-```{r csv nce, eval=FALSE, include=FALSE}
+```{r csv nce noise, eval=FALSE, include=FALSE}
 #NE PAS FAIRE TOURNER CETTE CELLULE, HYPER LONG, IMPORTER LE CSV A LA PLACE
 
 df_nce_noises = data.frame(matrix(ncol = 4, nrow = 0))
@@ -439,11 +439,11 @@ write.csv(df_nce_noises, "dataframes/df_nce_noises.csv")
 df_nce_noises <- read_csv("dataframes/df_nce_noises.csv")[,-1]
 df_nce_noises$const_error = abs(df_nce_noises$const - 4*sqrt(2*pi))
 
-png('df_nce_noises.png', units="cm", width=15, height=11, res=300)
+#png('df_nce_noises.png', units="cm", width=15, height=11, res=300)
 
 ggplot(df_nce_noises, aes(x = param_1, y = param_2, color = law)) + geom_point(size = 2) + scale_color_manual(values = pal2, labels = c(expression(Cauchy(m[emp],sd[emp])), expression(Uniforme(X[min],X[max])))) + labs(col="Loi du bruit : ") + xlab(expression(mu)) + ylab(expression(sigma)) + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + geom_vline(xintercept = 2, linetype="dotted") + geom_hline(yintercept = 4, linetype="dotted")
 
-dev.off()
+#dev.off()
 ```
 
 \newpage
@@ -535,7 +535,7 @@ write.csv(as.data.frame(df_rli_bootstrap), "dataframes/df_rli_bootstrap.csv")
 ```
 
 ```{r}
-kable(bootstrap(df_nce_bootstrap, 0.05))
+#kable(bootstrap(df_nce_bootstrap, 0.05))
 ```
 
 
@@ -647,12 +647,6 @@ df_recurs_melted = melt(df_recurs, id.vars = "iteration")
 ggplot(df_recurs_melted, aes(x = iteration, y = value)) + geom_line(aes(color = variable, group = variable)) + scale_color_manual(values = pal2, labels = lab) + labs(col="Paramètres : ") + ylab("Valeurs des paramètres") + xlab("Itérations") + geom_hline(yintercept = 2, linetype="dotted") + geom_hline(yintercept = 4, linetype="dotted")  + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin())
 
 #dev.off()
-```
-```{r}
-df_recurs = data.frame(df)[-1,]
-df_recurs$iteration = 1:30
-colnames(df_recurs) = c("param_1", "param_2","iteration")
-write.csv(df_recurs, "dataframes/df_recurs.csv")
 ```
 
 
@@ -820,7 +814,6 @@ ggplot(df_rev_log_reg_agg, aes(x = size_data, y = const_error, color = ratio_alp
 ```
 
 
-
 Une tentative de la régression logistique inverse sur données gaussiennes, qui fonctionne bien, insensible aux conditions initiales. 
 ```{r}
 
@@ -868,7 +861,7 @@ rev_log_reg_gaussien = function(n1,n2,n3){
 }
 
 
-rev_log_reg_gaussien(100000,100000,100000)
+rev_log_reg_gaussien(10000,10000,10000)
 c(sqrt(2*pi*1),sqrt(2*pi*9),sqrt(2*pi*36)) # pour comparer a,b,c aux vraies constantes de normalisations
 ```
 
@@ -1215,7 +1208,7 @@ graph_config(test5)
 #dev.off()
 ```
 
-```{r}
+```{r eval=FALSE}
 #------- MC MLE --------------------------------------------------------------------#
 
 # Fonction objectif
@@ -1224,7 +1217,7 @@ L = function(alpha){ return(sum(log(pm_barre_ising(x,alpha)/pm_barre_ising(x,psi
 optimize(L, c(0,1), maximum = TRUE)$maximum
 ```
 
-```{r}
+```{r eval=FALSE}
 #------ Régression logistique inverse ----------------------------------------------#
 
 # calcul des probabilités p_j
@@ -1256,7 +1249,7 @@ constante_additive = const[2] + log(1) - log(n/(m+n))
 exp(-const[1] + log(m/(m+n)) + constante_additive)
 ```
 
-```{r}
+```{r eval=FALSE}
 # ------- NCE --------------------------------------------------------------------------#
 
 h = function(u, theta){
@@ -1277,7 +1270,8 @@ h = function(u, theta){
   print(c(theta[1], exp(-theta[2])))
 
 ```
-```{r}
+
+```{r eval=FALSE}
 # Constante calculée par le package GiRaf
 NC.mrf(height, width, beta)
 ```
