@@ -1,5 +1,6 @@
 ---
-title: "Noise-contrastive estimation of normalising constants and GANs"
+title: "Annexe"
+subtitle: 'Noise-contrastive estimation of normalising constants and GANs'
 header-includes:
   - \usepackage{mathrsfs}
   - \usepackage{bm}
@@ -12,12 +13,24 @@ output:
     number_sections: true
 ---
 
+Ce document est une annexe de notre mémoire constituant une documentation de notre code et reprenant les résultats numériques principaux. 
+
+Nous utilisons directement les notations déjà présentées dans le manuscrit du mémoire.
+
+Utilisation : cliquer sur RUN ALL dans Rstudio pour faire tourner les algorithmes à partir des données pré-générées. Celles-ci sont enregistrées sous forme de fichiers .csv dans le dossier __dataframes__ du github. Pour générer de nouvelles données, retirer les guillemets dans les cellules de code concernées.
+
 \tableofcontents
 
 \newpage
-\section{Fonctions génériques}
+\section{Cadre de travail R}
 
-```{r include=FALSE}
+
+```{r results = 'hide', message = FALSE, warning = FALSE}
+
+#------------- CADRE DE TRAVAIL RSTUDIO ----------------------------------------
+
+# Packages utilisés dans le code
+
 library(ggplot2)
 library(reshape2)
 library(matrixStats)
@@ -27,32 +40,32 @@ library(tseries)
 library(readr)
 library(Rcpp)
 library(GiRaF)
-```
 
-```{r include=FALSE}
-# Palettes
+
+# Palettes pour les graphiques
 
 pal5 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#DC863B", "#E1AF00")
 pal4 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#DC863B")
 pal3 = c("#3B9AB2", "#EBCC2A", "#DC863B")
 pal2 = c("#3B9AB2", "#DC863B")
 pal2_bis = c("#3B9AB2", "#EBCC2A")
-
 ```
 
+\newpage
+\section{Fonctions utilitaires}
 
 \subsection{Algorithme d'Hasting}
 
-Utilité : simuler selon $p_m(.,\psi)$ pour un paramètre $\psi$ choisi. 
+Utilité : simuler selon $p_m(., \psi) := \frac{\overline{p_m}(.,\psi)}{Z(\psi)}$ pour un paramètre $\psi$ choisi, sans connaissance de la constante de normalisation $Z(\psi)$.
 
 \begin{table}[!h]
 \begin{tabular}{|l|l|l|l|}
 \hline
-\textbf{Argument} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
-x & vecteur & rcauchy(100, 0, 1) &  notre échantillon de densité inconnue \\ \hline
-n & entier & 100 & taille de la simulation \\ \hline
-psi & vecteur & c(0,1) & paramètres de la fonction h \\ \hline
+\textbf{Entrée} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
+x & vecteur & rnorm(100, 2, 4) &  notre échantillon de densité inconnue \\ \hline
+n & entier & 100 & taille de l'échantillon simulé \\ \hline
 h & fonction &  & fonction qui retourne $\overline{p_m}(.,\psi)$\\ \hline
+psi & vecteur & c(mean(x),sd(x)) & paramètres de la fonction h \\ \hline
 \textbf{Sortie} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
 y & vecteur &  &  notre échantillon simulé \\ \hline
 \end{tabular}
@@ -60,17 +73,19 @@ y & vecteur &  &  notre échantillon simulé \\ \hline
 
 ```{r hasting}
 hasting = function(x, n, psi, h){
+  # on tire le premier état de la chaine de markov dans l'échantillon de données initiales
   y = c()
   y = append(y, sample(x, 1))
   for (i in 2:n){
+    # on tire une proposition pour le nouvel état de la chaîne
     y_ = rnorm(1, y[i-1], 1)
+    # on calcule la probabilité d'acceptation
     u = runif(1)
-    if ( u <= 
-         (h(y_,psi) * dnorm(y_, y[i-1], 1))
-         /(h(y[i-1],psi) * dnorm(y[i-1], y_, 1))
-    ){ 
+    if ( u <= (h(y_,psi) * dnorm(y_, y[i-1], 1)) / (h(y[i-1],psi) * dnorm(y[i-1], y_, 1))){ 
+    # le nouvel état est accepté
       y = append(y, y_)} 
     else { 
+    # le nouvel état n'est pas accepté
       y = append(y, y[i-1])
     }
   }
@@ -78,101 +93,245 @@ hasting = function(x, n, psi, h){
 }
 ```
 
-Ci-dessous une autre version qui génère un échantillon iid.
+\newpage
+\subsection{Algorithme d'Hasting i.i.d.}
+
+Utilité : imiter la simulation d'un échantillon de données i.i.d. à partir de l'algorithme d'Hasting
 
 \begin{table}[!h]
 \begin{tabular}{|l|l|l|l|}
 \hline
 \textbf{Argument} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
-x & vecteur & rcauchy(100, 0, 1) &  notre échantillon de densité inconnue \\ \hline
-n & entier & 100 & taille de la simulation \\ \hline
-psi & vecteur & c(0,1) & paramètres de la fonction h \\ \hline
+x & vecteur & rnorm(100, 2, 4) &  notre échantillon de densité inconnue \\ \hline
+n & entier & 100 & taille de l'échantillon simulé \\ \hline
 h & fonction &  & fonction qui retourne $\overline{p_m}(.,\psi)$\\ \hline
-$\epsilon$ & Entier & 2 & pas de décorrélation $\overline{p_m}(.,\psi)$\\ \hline
+psi & vecteur & c(mean(x),sd(x)) & paramètres de la fonction h \\ \hline
+eps & entier & 100 & pas de décorrélation\\ \hline
+\textbf{Sortie} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
+y & vecteur &  &  notre échantillon simulé \\ \hline
 \end{tabular}
 \end{table}
 
 ```{r hasting iid}
 hasting_iid = function(x, n, psi, h, eps){
+  # on tire le premier état de la chaine de markov dans l'échantillon de données initiales
   y = c()
   y = append(y, sample(x, 1))
   for (i in 2:(n*eps)){
+    # on tire une proposition pour le nouvel état de la chaîne
     y_ = rnorm(1, y[i-1], 1)
+    # on calcule la probabilité d'acceptation
     u = runif(1)
-    if ( u <= 
-         (h(y_,psi) * dnorm(y_, y[i-1], 1))
-         /(h(y[i-1],psi) * dnorm(y[i-1], y_, 1))
-    ){ 
+    if ( u <= (h(y_,psi) * dnorm(y_, y[i-1], 1))/(h(y[i-1],psi) * dnorm(y[i-1], y_, 1))){ 
+    # le nouvel état est accepté
       y = append(y, y_)} 
     else { 
+    # le nouvel état n'est pas accepté
       y = append(y, y[i-1])
     }
   }
+  # on ne conserve qu'un état tous les "eps" pas
   filter = y * rep(c(1,rep(0, eps-1)), n)
   return (filter[filter != 0])
 }
 ```
 
-\subsection{MC MLE (Geyer)}
+\newpage
+\section{Méthodes d'estimation des paramètres et de la constante}
 
-Utilité : retourne une estimation des paramètres selon la méthode décrite dans le papier de Geyer. 
+Les fonctions présentées ci dessous sont valables en dimension de taille 1, c'est à dire lorsqu'un point de donnée est un scalaire et que l'échantillon de données forme un vecteur. Elles seront à adapter pour des dimensions plus élevées, par exemple dans notre application au modèle d'Ising.
+
+\subsection{Monte Carlo Maximum Likelihood Estimation (MC MLE)}
+
+Utilité : retourne une estimation de $\alpha^*$ selon la méthode MC MLE.
+
+\begin{table}[!h]
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Entrée} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
+x & vecteur & rnorm(100, 2, 4) &  notre échantillon de densité inconnue \\ \hline
+n & entier & 100 & taille de l'échantillon de bruit \\ \hline
+h & fonction &  & fonction qui retourne $\overline{p_m}(.,\psi)$ (bruit)\\ \hline
+psi & vecteur & c(mean(x),sd(x)) & paramètres de la fonction h \\ \hline
+\textbf{Sortie} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
+$\widehat{\alpha^*}$ & vecteur &  & estimation de $\alpha^*$\\ \hline
+\end{tabular}
+\end{table}
 
 ```{r mcmle}
 mc_mle = function(x, n, psi, h){
-  
   m = length(x)
-
+  
+  # on génère l'échantillon de bruit
   y = hasting(x, n, psi, h)
-    
-  L = function(theta){
-    return(sum(log(h(x,theta)/h(x,psi))) - m*log(mean(h(y,theta)/h(y,psi))))
+  
+  # on pose la fonction objectif
+  L = function(alpha){
+    return(sum(log(h(x,alpha)/h(x,psi))) - m*log(mean(h(y,alpha)/h(y,psi))))
   }
   
-  theta = optim(
+  # on estime alpha par l'algorithme du gradient conjugué
+  alpha = optim(
     par = rep(1,length(psi)),
     gr = "CG",
     control = list(fnscale=-1),
     fn = L
   )$par
 
-  return(theta)
+  return(alpha)
 }
 ```
 
+\newpage
+\subsection{Régression logistique inverse naïve}
 
-\subsection{NCE (Gutmann)}
+Utilité : retourne une estimation de $Z(\alpha^*)$ en utilisant pour le bruit la loi $p_m$ pour un paramètre $\psi$ choisi.
 
-Utilité : Retourne l'estimation de la constante et des paramètres.
+\begin{table}[!h]
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Entrée} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
+x & vecteur & rnorm(100, 2, 4) &  notre échantillon de densité inconnue \\ \hline
+alpha & vecteur & c(2,4) & paramètres de h pour le modèle \\ \hline
+n & entier & 100 & taille de l'échantillon de bruit \\ \hline
+psi & vecteur & c(mean(x),sd(x)) & paramètres de h pour le bruit\\ \hline
+h & fonction &  & fonction qui retourne $\overline{p_m}(.,.)$ \\ \hline
+eps & entier & 100 & pas de décorrélation\\ \hline
+\textbf{Sortie} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
+$\widehat{Z(\alpha^*)}$ & nombre &  & estimation de la constante de normalisation à une constante près\\ \hline
+\end{tabular}
+\end{table}
+
+```{r rev_log_reg_naive}
+rev_log_reg_naive = function(x, alpha, n, psi, h, eps){
+  
+  m = length(x)
+  y = hasting_iid(x, n, psi, h, eps)
+  
+  # calcul des probabilités p_X et p_Y
+  denom = function(sample, eta) {
+    return(pm_barre(sample, alpha)*exp(eta[1]) + pm_barre(sample,psi)*exp(eta[2]))}
+  p_X = function(sample, eta){
+    return (pm_barre(sample, alpha)*exp(eta[1]) / denom(sample, eta))}
+  p_Y = function(sample, eta){
+    return (pm_barre(sample, psi)*exp(eta[2]) / denom(sample, eta))}
+  
+  # fonction objectif
+  L = function(eta) {
+    return(sum(log(p_X(x, eta))) + sum(log(p_Y(y, eta))))}
+  
+  # initialisation descente de gradient
+  eta1 = -log(sd(x)*sqrt(mean(x)*pi)) + log(m/(m+n))
+  eta2 = -log(sd(y)*sqrt(mean(y)*pi)) + log(n/(m+n))
+  
+  # optimisation
+  eta = optim(
+    par = c(eta1,eta2),
+    gr = "CG",
+    control = list(fnscale=-1),
+    fn = L
+  )$par
+  
+  const = exp(-eta[1] + log(m/(m+n)))
+  return(const)
+}
+```
+
+\newpage
+\subsection{Régression logistique inverse}
+
+Utilité : retourne une estimation de $Z(\alpha^*)$ en utilisant pour le bruit une loi dont on connait la constante de normalisation.
+
+\begin{table}[!h]
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Entrée} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
+x & vecteur & rnorm(100, 2, 4) &  notre échantillon de densité inconnue \\ \hline
+generate\_y & fonction & rcauchy &  générateur de la loi $p_{noise}$ de paramètres $n$ et $psi$ \\ \hline
+n & entier & 100 & taille de l'échantillon de bruit \\ \hline
+alpha & vecteur & c(2,4) & paramètres de la fonction h1 (modèle) \\ \hline
+psi & vecteur & c(mean(x),sd(x)) & paramètres des fonctions h2 et generate\_y (bruit)\\ \hline
+h1 & fonction &  & fonction qui retourne $\overline{p_m}(.,\alpha)$ (modèle)\\ \hline
+h2 & fonction &  & fonction qui retourne $\overline{p_{noise}}(.,\psi)$ (bruit)\\ \hline
+\textbf{Sortie} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
+$\widehat{Z(\alpha^*)}$ & nombre &  & estimation de la constante de normalisation\\ \hline
+\end{tabular}
+\end{table}
+
+```{r rev_log_reg_noise}
+rev_log_reg = function(x, generate_y, n, alpha, psi, h1, h2){
+  
+  y = do.call(generate_y, c(list(n),psi))
+  m = length(x)
+  
+  # calcul des probabilités p_X et p_Y
+  denom = function(sample, eta) {
+    return(h1(sample, alpha)*exp(eta[1]) + h2(sample,psi)*exp(eta[2]))}
+  p_X = function(sample, eta){
+    return (h1(sample, alpha)*exp(eta[1]) / denom(sample, eta))}
+  p_Y = function(sample, eta){
+    return (h2(sample, psi)*exp(eta[2]) / denom(sample, eta))}
+  
+  # fonction objectif
+  L = function(eta) {
+    return(sum(log(p_X(x, eta))) + sum(log(p_Y(y, eta))))}
+  
+  # initialisation descente de gradient
+  eta1 = log(m/(m+n))
+  eta2 = log(n/(m+n))
+  
+  # optimisation
+  eta = optim(
+    par = c(eta1,eta2),
+    gr = "CG",
+    control = list(fnscale=-1),
+    fn = L
+  )$par
+  
+  constante_additive = eta[2] + log(1) - log(n/(n+m))
+  const1 = exp(-eta[1] + log(m/(m+n)) + constante_additive)
+  const2 = exp(-eta[2] + log(n/(m+n)) + constante_additive)
+  
+  return(const1)
+}
+```
+
+\newpage
+\subsection{Noise Constrastive Estimation}
+
+Utilité : Retourne l'estimation du paramètre $\alpha^*$ et de la constante de normalisation $Z(\alpha^*)$ par la méthode NCE.
 
 \begin{table}[!h]
 \begin{tabular}{|l|l|l|l|}
 \hline
 \textbf{Argument} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
-x & vecteur & rcauchy(100, 0, 1) & notre échantillon de densité inconnue \\ \hline
-law\_y & fonction & rnorm & fonction qui retourne un échantillon suivant la loi $p_n$ \\ \hline
-n & entier & 100 & taille de l'échantillon de bruit suivant la loi $p_n$ \\ \hline
-params\_y & vecteur & c(0,1) & arguments de la fonction law\_y \\ \hline
+x & vecteur & rnorm(100, 2, 4) & notre échantillon de densité inconnue \\ \hline
+generate\_y & fonction & rcauchy & fonction qui retourne un échantillon suivant la loi $p_n$ \\ \hline
+psi & vecteur & c(mean(x),sd(x)) & arguments de la fonction generate\_y \\ \hline
 log\_pm & fonction &  & fonction qui retourne le logarithme de la densité $p_m$ \\ \hline
 log\_pn & fonction &  & fonction qui retourne le logarithme de la densité $p_n$ \\ \hline
-size\_theta & entier & 3 & taille de $\theta$, vaut habituellement 2 ou 3 \\ \hline
+size\_theta & entier & 3 & taille de $\theta := (\alpha,c)$, vaut généralement 2 ou 3 \\ \hline
+n & entier & 100 & taille de l'échantillon de bruit suivant la loi $p_n$ \\ \hline
 \end{tabular}
 \end{table}
 
 ```{r nce}
-nce = function(x, law_y, params_y, log_pm, log_pn, size_theta, n){
-  
-  y = do.call(law_y, c(list(n),params_y))
-  
+nce = function(x, generate_y, psi, log_pm, log_pn, size_theta, n){
   m = length(x)
   
+  # on simule l'échantillon de bruit 
+  y = do.call(generate_y, c(list(n),psi))
+  
+  # on pose la fonction objectif
   h = function(u, theta){
-    return( 1 / (1 + n/m * exp(log_pn(u) - log_pm(u, theta))))
+    return( 1 / (1 + n/m * exp(log_pn(u, psi) - log_pm(u, theta))))
   }
   
   J = function(theta){
     return( sum(log(h(x, theta))) + sum(log(1 - h(y, theta))) )
   }
   
+  # on estime theta par l'algorithme du gradient conjugué
   theta = optim(
     par = rep(1, size_theta),
     gr = "CG",
@@ -180,736 +339,35 @@ nce = function(x, law_y, params_y, log_pm, log_pn, size_theta, n){
     fn = J
   )$par
   
-  return(c(theta[-size_theta], exp(-theta[size_theta])))
+  # on calcule l'estimation de la constante de normalisation à partir de l'estimation de c
+  const = exp(-theta[size_theta])
+  alpha = theta[-size_theta]
+  
+  return(c(alpha, const))
 }
 ```
-
-\subsection{Graphiques}
-
-Utilité : afficher l'histogramme pour un échantillon de données $x$.
-
-```{r print_hist}
-print_hist = function(x) {
-  df = data.frame(x = x)
-  hist_x = ggplot(df, aes(x=x)) + 
-           geom_histogram(aes(y = ..density..), bins = 20, color="white", fill = "grey") + 
-           labs(y = "Fréquence") +
-           stat_function(fun = dcauchy, args = list(location = mean(df$x), scale = sd(df$x)), size = 1, aes(colour = "Cauchy")) +
-           scale_colour_manual("Densité du bruit :", values=c(pal2[1]), labels = expression(Cauchy(m[emp],sd[emp]))) +
-           theme(legend.position="bottom", legend.box="vertical", legend.margin=margin())
-  print(hist_x)
-}
-```
-
-Utilité : pour NCE, afficher l'évolution des paramètres au fur et à mesure de l'augmentation de n (la dimension de l'échantillon de bruit)
-
-```{r NCE_evol_params}
-NCE_evol_params = function(x, law_y, params_y, log_pm, log_pn, size_theta, ratio, steps, labels) {
-  
-  # Creation de l'abscisse
-  m = length(x)
-  N = seq(0, m*ratio, length.out = steps + 1)
-  
-  # Creation de l'ordonnée
-  theta = c()
-  for (n in N) {
-    theta = append(theta, nce(x, law_y, params_y, log_pm, log_pn, size_theta, n))
-  }
-  
-  # Formatage des données
-  theta = t(rbind(matrix(theta, nrow = size_theta),N))
-  df = as.data.frame(theta)
-  df_melted = melt(df, id.vars = "N")
-  
-  # Plot
-  plot_df = ggplot(df_melted, aes(x = N, y = value)) + 
-  geom_line(aes(color = variable, group = variable)) +
-  geom_point(aes(color = variable, group = variable)) +
-  labs(title = "Evolution des paramètres par rapport au bruit", 
-       x = "n (taille du bruit)", 
-       y = "Paramètres", 
-       color = "Légende") +
-  scale_color_manual(labels = labels, values = c("blue", "red", "orange"))
-  
-  print(plot_df)
-  
-  #return(theta)
-}
-```
-
-Note : il faudrait optimiser le temps de calcul de ces fonctions, peut-être en matriciel au lieu des boucles ou bien avec du calcul en parralèle sur CPU/GPU
-
 
 \newpage
+\section{Illustration des méthodes : la loi normale}
 
-\section{Illustration avec la loi normale }
+\subsection{Application des méthodes}
 
-Soit $x$ l'échantillon de taille $m$ obtenu selon la loi de densité inconnue $p_d$.
+Dans cette section on applique les méthodes présentées ci-dessus à l'exemple conducteur de du mémoire, la loi normale $\mathscr{N}(2,4)$.
 
-On considère ici que $p_d$ appartient à la famille de fonctions paramétrées par $\theta = (c, \mu, \sigma)$ suivante :
+```{r}
+#------------- DENSITES NORMALISEES ET NON NORMALISEES NECESSAIRES DANS LES METHODES 
 
-$$p_m(u;\theta) = \frac{1}{Z(\mu, \sigma)} \times exp \big[-\frac{1}{2} \big(\frac{u - \mu}{\sigma} \big)^2 \big]  \quad \mbox{d'où} \quad ln(p_m(u;\theta)) = c - \frac{1}{2} \big(\frac{u}{\sigma} - \frac{\mu}{\sigma} \big)^2$$
-```{r exemple1}
 pm_barre = function(u, theta){
+  # theta[1] = mu
+  # theta[2] = sigma
   return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
 }
 
 log_pm = function(u,theta){
+  # theta[1] = mu 
+  # theta[2] = sigma 
+  # theta[3] = c
   return(theta[3] - 1/2 * (u/theta[2] - theta[1]/theta[2]) ** 2)
-  # theta[1] = mu / theta[2] = sigma / theta[3] = c
-}
-
-log_pn_cauchy = function(u){
-  return(log(dcauchy(u, mean(x), sd(x))))
-}
-
-log_pn_unif = function(u){
-  return(log(dcauchy(u, min(x), max(x))))
-}
-
-m = 10000
-n = 10000
-x = rnorm(m, 2, 4)
-size_theta = 3
-```
-
-\subsection{Méthode MC MLE}
-
-```{r mc_mle application}
-# METHODE MC MLE
-mc_mle(x, n, c(10,5), pm_barre)
-```
-
-Etudions l'impact de la dimension des échantillons sur la convergence des estimateurs.
-
-```{r csv mc mle, eval=FALSE, include=FALSE}
-#NE PAS FAIRE TOURNER CETTE CELLULE, HYPER LONG, IMPORTER LE CSV A LA PLACE
-
-df_mcmle = data.frame(matrix(ncol = 4, nrow = 0))
-colnames(df_mcmle_2) = c("param_1", "param_2", "size_data", "ratio_noise_data")
-
-M = c(1000, 10000)
-
-
-for (m in M){
-  x = rnorm(m, 2, 4)
-  psi = c(mean(x), sd(x))
-  N = c(1, 10)
-  for (n in N) {
-    for (i in 1:100) {
-       df_mcmle_2[nrow(df_mcmle_2) + 1, ] = c(mc_mle(x, m*n, psi, pm_barre), m, n)
-    }
-  }
-}
-```
-
-```{r processing csv mc mle, include=FALSE}
-df_mcmle <- read_csv("dataframes/df_mcmle.csv")[,-1]
-
-df_mcmle$size_data = as.factor(df_mcmle$size_data)
-df_mcmle$ratio_noise_data = as.factor(df_mcmle$ratio_noise_data)
-
-df_mcmle_filt = subset(df_mcmle, param_2 <= 6 & param_2 >= 0 & param_1 >= -2 & param_1 <= 6)
-```
-
-```{r graph mc mle cv}
-#png('df_mcmle.png', units="cm", width=15, height=11, res=300)
-
-ggplot(df_mcmle_filt, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point(size = 2) + scale_color_manual(values = pal2) + labs(shape="Ratio (n/m) : ", col="Taille de l'échantillon (m) : ") + xlab(expression(mu)) + ylab(expression(sigma)) + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + geom_vline(xintercept = 2, linetype="dotted") + geom_hline(yintercept = 4, linetype="dotted")
-
-#dev.off()
-```
-
-Etudions l'impact du choix de $\psi$ sur la convergence des estimateurs.
-
-```{r csv mc mle psi, eval=FALSE, include=FALSE}
-df_mcmle_psi = data.frame(matrix(ncol = 3, nrow = 0))
-colnames(df_mcmle_psi) = c("param_1", "param_2", "ratio_alpha_psi")
-
-x = rnorm(10000, 2, 4)
-for (r in c(1,3,5,7)){
-  for (i in 1:100) {
-     df_mcmle_psi[nrow(df_mcmle_psi) + 1, ] = c(mc_mle(x, 100000, c(2*r, 4*r), pm_barre), r)
-  }
-}
-write.csv(df_mcmle_psi, "dataframes/df_mcmle_psi.csv")
-
-```
-
-
-```{r graph mc mle psi, message = FALSE}
-df_mcmle_psi <- read_csv("dataframes/df_mcmle_psi.csv")[,-1]
-
-df_mcmle_psi = df_mcmle_psi[order(-df_mcmle_psi$ratio_alpha_psi),]
-
-lab = list(bquote(psi == "(2,4)"), bquote(psi == "(6,12)"), bquote(psi == "(10,20)"), bquote(psi == "(14,28)"))
-
-df_mcmle_psi$ratio_alpha_psi = as.factor(df_mcmle_psi$ratio_alpha_psi)
-
-#png('df_mcmle_psi.png', units="cm", width=15, height=11, res=300)
-
-ggplot(df_mcmle_psi, aes(x = param_1, y = param_2, color = ratio_alpha_psi)) + geom_point(size = 2) + scale_color_manual(values = pal4, labels = lab) + labs(col=" ") + xlab(expression(mu)) + ylab(expression(sigma)) + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + geom_vline(xintercept = 2, linetype="dotted") + geom_hline(yintercept = 4, linetype="dotted")
-
-#dev.off()
-```
-
-\subsection{Méthode NCE}
-
-```{r nce application}
-# METHODE NCE
-nce(x, rcauchy, c(mean(x),sd(x)), log_pm, log_pn_cauchy, size_theta, n)
-```
-
-On étudie l'impact de n et m pour une loi de Cauchy.
-
-```{r csv nce, eval=FALSE, include=FALSE}
-#NE PAS FAIRE TOURNER CETTE CELLULE, HYPER LONG, IMPORTER LE CSV A LA PLACE
-
-df_nce = data.frame(matrix(ncol = 5, nrow = 0))
-colnames(df_nce) = c("param_1", "param_2", "const", "size_data", "ratio_noise_data")
-
-M = c(1000, 10000, 100000)
-
-
-for (m in M){
-  x = rnorm(m, 2, 4)
-  psi = c(mean(x), sd(x))
-  N = c(1, 10)
-  for (n in N) {
-    for (i in 1:50) {
-       df_nce[nrow(df_nce) + 1, ] = c(nce(x, rcauchy, psi, log_pm, log_pn_cauchy, size_theta, m*n), m, n)
-    }
-  }
-}
-write.csv(df_nce, "dataframes/df_nce.csv")
-```
-
-```{r process csv nce, include=FALSE}
-df_nce <- read_csv("dataframes/df_nce.csv")[,-1]
-
-df_nce$size_data = as.factor(df_nce$size_data)
-df_nce$ratio_noise_data = as.factor(df_nce$ratio_noise_data)
-
-df_nce$const_error = abs(df_nce$const - 4*sqrt(2*pi))
-```
-
-```{r graph nce params}
-#png('df_nce.png', units="cm", width=15, height=11, res=300)
-
-ggplot(df_nce, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + geom_point(size = 2) + scale_color_manual(values = pal3) + labs(shape="Ratio (n/m) : ", col="Taille de l'échantillon (m) : ") + xlab(expression(mu)) + ylab(expression(sigma)) + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + geom_vline(xintercept = 2, linetype="dotted") + geom_hline(yintercept = 4, linetype="dotted")
-
-#dev.off()
-```
-
-```{r graph nce const}
-#png('df_nce_const.png', units="cm", width=15, height=11, res=300)
-
-ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + geom_boxplot() + scale_color_manual(values = pal2) + labs(col="Ratio (n/m) : ") + xlab("Taille de l'échantillon (m)") + ylab("Erreur")
-
-#dev.off()
-```
-
-Compairason entre un bruit issu d'une loi de Cauchy et un bruit issu d'une loi uniforme.
-
-```{r csv nce noise, eval=FALSE, include=FALSE}
-#NE PAS FAIRE TOURNER CETTE CELLULE, HYPER LONG, IMPORTER LE CSV A LA PLACE
-
-df_nce_noises = data.frame(matrix(ncol = 4, nrow = 0))
-colnames(df_nce_noises) = c("param_1", "param_2", "const", "law")
-
-m = 10000
-ratio = 10
-n = ratio*m
-
-x = rnorm(m, 2, 4)
-psi = c(min(x), max(x))
-for (i in 1:100) {
-   df_nce_noises[nrow(df_nce_noises) + 1, ] = c(nce(x, runif, psi, log_pm, log_pn_unif, size_theta, n), "uniforme")
-}
-psi = c(mean(x), sd(x))
-for (i in 1:100) {
-   df_nce_noises[nrow(df_nce_noises) + 1, ] = c(nce(x, rcauchy, psi, log_pm, log_pn_cauchy, size_theta, n), "cauchy")
-}
-
-
-write.csv(df_nce_noises, "dataframes/df_nce_noises.csv")
-```
-
-```{r process csv nce noises, include=FALSE}
-df_nce_noises <- read_csv("dataframes/df_nce_noises.csv")[,-1]
-df_nce_noises$const_error = abs(df_nce_noises$const - 4*sqrt(2*pi))
-
-#png('df_nce_noises.png', units="cm", width=15, height=11, res=300)
-
-ggplot(df_nce_noises, aes(x = param_1, y = param_2, color = law)) + geom_point(size = 2) + scale_color_manual(values = pal2, labels = c(expression(Cauchy(m[emp],sd[emp])), expression(Uniforme(X[min],X[max])))) + labs(col="Loi du bruit : ") + xlab(expression(mu)) + ylab(expression(sigma)) + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + geom_vline(xintercept = 2, linetype="dotted") + geom_hline(yintercept = 4, linetype="dotted")
-
-#dev.off()
-```
-
-\newpage
-\section{Nouvelles approches}
-\subsection{Bootstrap}
-
-
-```{r NCE_bootstrap, eval=FALSE, include=FALSE}
-
-# NE PAS FAIRE TOURNER
-
-# Calcul de {size_boot} estimateurs par bootstrap pour la méthode NCE
-NCE_bootstrap = function(x, law_y, params_y, log_pm, log_pn, size_theta, n, size_boot) {
-  m = length(x)
-  theta_bootstrap = c()
-  x_bootstrap = x
-  for (i in 1:size_boot) {
-    theta_bootstrap = append(theta_bootstrap, nce(x_bootstrap, 
-                                                  law_y, 
-                                                  params_y, 
-                                                  log_pm, 
-                                                  log_pn, 
-                                                  size_theta, 
-                                                  n))
-    x_bootstrap = sample(x, size = m, replace=TRUE)
-  }
-  return(matrix(theta_bootstrap, nrow = size_theta))
-}
-
-# Calcul de {size_boot} estimateurs par bootstrap pour la méthode MC MLE
-MCMLE_bootstrap = function(x, n, psi, pm_barre, size_boot) {
-  m = length(x)
-  theta_bootstrap = c()
-  x_bootstrap = x
-  for (i in 1:size_boot) {
-    theta_bootstrap = append(theta_bootstrap, mc_mle(x_bootstrap, 
-                                                  n, 
-                                                  psi, 
-                                                  pm_barre))
-    x_bootstrap = sample(x, size = m, replace=TRUE)
-  }
-  return(matrix(theta_bootstrap, nrow = 2))
-}
-
-RLI_bootstrap = function(x, law_y, n, alpha, psi, pm_barre, pn_barre, size_boot) {
-  m = length(x)
-  theta_bootstrap = c()
-  x_bootstrap = x
-  for (i in 1:size_boot) {
-    theta_bootstrap = append(theta_bootstrap, rev_log_reg_with_noise(x_bootstrap, 
-                                                  law_y,
-                                                  n, 
-                                                  alpha,
-                                                  psi, 
-                                                  pm_barre,
-                                                  pn_barre))
-    x_bootstrap = sample(x, size = m, replace=TRUE)
-  }
-  return(matrix(theta_bootstrap, nrow = 1))
-}
-
-
-# etude bootstrap de l'estimateur
-bootstrap = function(matrix, alpha){
-  return(data.frame(
-    theta = matrix[,1],
-    biais = rowMeans(matrix) - matrix[,1],
-    IC = rowQuantiles(matrix, probs = c(alpha/2, 1-alpha/2))
-  ))
-}
-
-
-m = 10000
-ratio = 10
-n = m * ratio
-size_boot = 100
-x = rnorm(m,2,4)
-alpha = c(2,4)
-psi = c(mean(x), sd(x))
-
-df_nce_bootstrap = NCE_bootstrap(x_test, rcauchy, psi, log_pm, log_pn_cauchy, 3, n, size_boot)
-write.csv(as.data.frame(df_nce_bootstrap), "dataframes/df_nce_bootstrap.csv")
-
-df_mcmle_bootstrap = MCMLE_bootstrap(x, n, psi, pm_barre, size_boot)
-write.csv(as.data.frame(df_mcmle_bootstrap), "dataframes/df_mcmle_bootstrap.csv")
-
-df_rli_bootstrap = RLI_bootstrap(x, rcauchy, n, alpha, psi, pm_barre, pn_cauchy, size_boot)
-write.csv(as.data.frame(df_rli_bootstrap), "dataframes/df_rli_bootstrap.csv")
-```
-
-```{r}
-#kable(bootstrap(df_nce_bootstrap, 0.05))
-```
-
-
-\subsection{Récursivité}
-
-Utilité : améliorer récursivement la précision de l'estimation via les estimations précédentes
-
-```{r mc_mle_recursif, eval=FALSE, include=FALSE}
-m = 10000
-n = 100000
-x = rnorm(m, 2, 4)
-psi = c(20,20)
-
-df_recurs_naif = data.frame(matrix(ncol = 3, nrow = 0))
-colnames(df_recurs_naif) = c("iteration", "param_1", "param_2")
-
-for (i in 1:30) {
-  y = hasting(x, n, psi, pm_barre)
-
-  L = function(theta){
-    return(sum(log(pm_barre(x,theta)/pm_barre(x,psi))) - m*log(mean(pm_barre(y,theta)/pm_barre(y,psi))))
-  }
-  
-  psi = optim(
-    par = rep(1,length(psi)),
-    gr = "CG",
-    control = list(fnscale=-1),
-    fn = L
-  )$par
-  
-  df_recurs_naif[nrow(df_recurs_naif) + 1, ] = c(i, psi)
-}
-
-write.csv(df_recurs_naif, "dataframes/df_recurs_naif.csv")
-```
-
-
-```{r graph lines mc mle recur, message = FALSE}
-df_recurs_naif <- read_csv("dataframes/df_recurs_naif.csv")[,-1]
-colnames(df_recurs_naif) = c("iteration", "param_1", "param_2")
-
-lab = list(bquote(mu), bquote(sigma))
-
-#png('df_recurs_naif.png', units="cm", width=15, height=11, res=300)
-
-df_recurs_naif_melted = melt(df_recurs_naif, id.vars = "iteration")
-ggplot(df_recurs_naif_melted, aes(x = iteration, y = value)) + geom_line(aes(color = variable, group = variable)) + scale_color_manual(values = pal2, labels = lab) + labs(col="Paramètres : ") + ylab("Valeurs des paramètres") + xlab("Itérations") + geom_hline(yintercept = 2, linetype="dotted") + geom_hline(yintercept = 4, linetype="dotted")  + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin())
-
-#dev.off()
-```
-Cette approche naïve n'améliore pas la précision de notre estimation. 
-
-Nouvelle approche à venir.
-
-
-```{r mc_mle_recursif_3, eval=FALSE, include=FALSE} 
-mc_mle_recursif_3 = function(x, n, psi, h, iterations){
-  
-  m = length(x)
-  PSI = matrix(ncol = 2, nrow = iterations + 1)
-  Y = c(hasting(x, n, psi, h))
-  PSI[1, ] = psi
-
-  for (i in 1:iterations) {
-  
-    law_mix_h = function(x, PSI){
-      size_x = length(x)
-      mix = matrix(rep(0, size_x*(i+1)), ncol = size_x, nrow = i+1)
-      for (j in 1:i){
-        mix[j,] = h(x, PSI[j,])
-      }
-      return(colSums(mix) / i)
-    }
-
-    L = function(theta){
-      return(sum(log(h(x,theta)/law_mix_h(x,PSI))) - m*log(mean(h(Y,theta)/law_mix_h(Y,PSI))))
-      #return(sum(log(h(x,theta)/h(x,psi))) - m*log(mean(h(y,theta)/h(y,psi))))
-    }
-    
-    PSI[i+1, ] = optim(
-      par = rep(1,length(psi)),
-      gr = "CG",
-      control = list(fnscale=-1),
-      fn = L
-    )$par
-    
-    Y = append(Y, hasting(x, n, PSI[i+1,], h))
-  }
-
-  return(PSI)
-}
-
-df_recurs = data.frame(mc_mle_recursif_3(rnorm(10000,2,4), 10000, c(20,20), pm_barre, 30))[-1,]
-df_recurs$iteration = 1:30
-colnames(df_recurs) = c("param_1", "param_2","iteration")
-write.csv(df_recurs, "dataframes/df_recurs.csv")
-
-```
-
-```{r}
-df_recurs <- read_csv("dataframes/df_recurs.csv")[,-1]
-colnames(df_recurs) = c("param_1", "param_2","iteration")
-
-lab = list(bquote(mu), bquote(sigma))
-
-#png('df_recurs.png', units="cm", width=15, height=11, res=300)
-
-df_recurs_melted = melt(df_recurs, id.vars = "iteration")
-ggplot(df_recurs_melted, aes(x = iteration, y = value)) + geom_line(aes(color = variable, group = variable)) + scale_color_manual(values = pal2, labels = lab) + labs(col="Paramètres : ") + ylab("Valeurs des paramètres") + xlab("Itérations") + geom_hline(yintercept = 2, linetype="dotted") + geom_hline(yintercept = 4, linetype="dotted")  + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin())
-
-#dev.off()
-```
-
-
-\subsection{Hasting iid}
-
-Afin de pouvoir appliquer numériquement la méthode de Reverse logistic regression, on aurait besoin de savoir simuler un échantillon iid suivant une loi dont on ne connait pas la constante de normalisation. L'idée est d'utiliser l'algorithme d'Hasting et de ne conserver qu'un échantillon tous les $\epsilon$ pas. Le code est en haut de ce document. 
-
-Etude de l'impact du choix du pas.
-
-```{r eval=FALSE, include=FALSE}
-df_hasting_iid = data.frame(matrix(ncol=7, nrow=0))
-colnames(df_hasting_iid) = c("epsilon", "mean", "sd", "skew", "kurtosis", "time", "mean_autocor")
-init = rnorm(1, 0, 1)
-n = 10000
-
-for (eps in 1:10){
-  for (i in 1:20) 
-  { 
-    t1<-Sys.time()
-    y = hasting_iid(init, n, c(0,1), pm_barre, eps)
-    t2<-Sys.time()
-    t = difftime(t2, t1)
-    df_hasting_iid[nrow(df_hasting_iid) + 1, ] = c(eps, mean(y), sd(y), skewness(y), kurtosis(y), t, mean(acf(y, plot = FALSE)$acf))
-  }
-}
-
-df_hasting_iid$mean = abs(df_hasting_iid$mean)
-df_hasting_iid$sd = abs(df_hasting_iid$sd - 1)
-df_hasting_iid$skew = abs(df_hasting_iid$skew)
-df_hasting_iid$kurtosis = abs(df_hasting_iid$kurtosis - 3)
-
-write.csv(df_hasting_iid, "dataframes/df_hasting_iid.csv")
-```
-
-```{r include=FALSE}
-df_hasting_iid <- read_csv("dataframes/df_hasting_iid.csv")[,-1]
-
-df_hasting_iid_agg = aggregate(
-  cbind(
-    df_hasting_iid$mean, 
-    df_hasting_iid$sd,
-    df_hasting_iid$skew,
-    df_hasting_iid$kurtosis,
-    df_hasting_iid$time,
-    df_hasting_iid$mean_autocor
-  ),
-  list(df_hasting_iid$epsilon),
-  mean
-)
-
-colnames(df_hasting_iid_agg) = c("epsilon", "mean", "sd", "skew", "kurtosis", "time", "mean_autocor")
-
-df_hasting_iid_melted = melt(df_hasting_iid_agg[,-6], id.vars = "epsilon")
-```
-
-```{r}
-ggplot(df_hasting_iid_melted, aes(x = epsilon, y = value)) + geom_line(aes(color = variable, group = variable)) + scale_color_manual(values = pal5)
-
-#ggplot(df_hasting_iid, aes(x = epsilon, y = time)) + geom_line()
-```
-$\epsilon = 2$ semble être un bon choix au regard du gain en terme d'auto-corrélation et du temps de calcul.
-
-\subsection{Reverse logistic regression : deux lois de même famille}
-
-La maximisation de la fonction objectif $$l_n(\eta) = \sum_{j=1}^m \sum_{i=1}^{n_j} log(p_j(X_{i,j}, \eta))$$ permet d'estimer les $\eta$ (qui sont fonction des constantes de normalisation des $h_j$). On utilise les notations suivantes :
-
-$$\eta_j = -log(Z_j) + log(\frac{n_j}{n}) ~\mbox{ avec } Z_j \mbox{ la constante de normalisation de } h_j$$
-$$p_j(x) = \frac{h_j(x)e^{\eta_j}}{\sum_{k=1}^m h_k(x)e^{\eta_k}}$$
-Exemple avec $m=2$, $n = n_1 + n_2 = 1000 + 1000$, et pour coller avec les méthodes différentes on va prendre $h_1$ la densité non normalisée d'une $\mathscr{N}(\alpha)$ dont on a estimé $\alpha$ par MC MLE et $h_2$ la densité non normalisée d'une $\mathscr{N}(\psi)$ avec $\psi$ qu'on choisit. 
-
-```{r rev_log_reg}
-rev_log_reg = function(x, alpha, n, psi, h, eps){
-  
-  m = length(x)
-  y = hasting_iid(x, n, psi, h, eps)
-  
-  # calcul des probabilités p_j
-  denom = function(sample, eta) {
-    return(pm_barre(sample, alpha)*exp(eta[1]) + pm_barre(sample,psi)*exp(eta[2]))}
-  p_1 = function(sample, eta){
-    return (pm_barre(sample, alpha)*exp(eta[1]) / denom(sample, eta))}
-  p_2 = function(sample, eta){
-    return (pm_barre(sample, psi)*exp(eta[2]) / denom(sample, eta))}
-  
-  # fonction objectif
-  L = function(eta) {
-    return(sum(log(p_1(x, eta))) + sum(log(p_2(y, eta))))}
-  
-  # initialisation descente de gradient
-  eta1 = -log(sd(x)*sqrt(2*pi)) + log(m/(m+n))
-  eta2 = -log(sd(y)*sqrt(2*pi)) + log(n/(m+n))
-  
-  # optimisation
-  const = optim(
-    par = c(eta1,eta2),
-    gr = "CG",
-    control = list(fnscale=-1),
-    fn = L
-  )$par
-  
-  a = exp(-const[1] + log(m/(m+n)))
-  return(a)
-}
-```
-
-```{r rev_log_reg init}
-pm_barre = function(u, theta){
-  return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
-}
-
-m = 1000
-n = 10000
-x = rnorm(m,2,4)
-psi = c(mean(x), sd(x))
-
-alpha = mc_mle(x, n, psi, pm_barre)
-print(alpha)
-```
-
-```{r rev_log_reg ex1}
-print(rev_log_reg(x, alpha, n, c(8,8), pm_barre, 2))
-```
-
-Etude de l'impact de la dimension, du ratio et des paramètres sur la convergence de la constante.
-
-```{r eval=FALSE, include=FALSE}
-df_rev_log_reg = data.frame(matrix(ncol = 4, nrow = 0))
-colnames(df_rev_log_reg) = c("const", "size_data", "ratio_noise_data", "ratio_alpha_psi")
-
-M = c(1000, 5000, 10000, 15000)
-N = c(1, 10)
-alpha = c(2,4)
-
-for (m in M){
-  x = rnorm(m, 2, 4)
-  for (n in N) {
-    for (r in 1:4) {
-      for (i in 1:15) {
-         df_rev_log_reg[nrow(df_rev_log_reg) + 1, ] = c(rev_log_reg(x, alpha, n*m, alpha*r, pm_barre, 2), m, n, r)
-      }
-    }
-  }
-}
-
-write.csv(df_rev_log_reg, "dataframes/df_rev_log_reg.csv")
-```
-
-```{r message=FALSE}
-df_rev_log_reg <- read_csv("dataframes/df_rev_log_reg.csv")[,-1]
-
-df_rev_log_reg_agg = aggregate(const ~ size_data + ratio_noise_data + ratio_alpha_psi,
-                    data = df_rev_log_reg,
-                    FUN = mean)
-df_rev_log_reg_agg$ratio_alpha_psi = as.factor(df_rev_log_reg_agg$ratio_alpha_psi)
-df_rev_log_reg_agg$ratio_noise_data = as.factor(df_rev_log_reg_agg$ratio_noise_data)
-df_rev_log_reg_agg$size_data = as.numeric(df_rev_log_reg_agg$size_data)
-df_rev_log_reg_agg$const_error = abs(df_rev_log_reg_agg$const - 4*sqrt(2*pi))
-
-#png('df_rev_log_reg.png', units="cm", width=15, height=11, res=300)
-
-ggplot(df_rev_log_reg_agg, aes(x = size_data, y = const_error, color = ratio_alpha_psi, shape = ratio_noise_data)) + geom_line() + geom_point() + labs(shape="Ratio (n/m) : ", col="Choix du paramètre : ") + xlab("Taille de l'échantillon X") + ylab("Erreur moyenne") + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + scale_color_manual(values = pal4, labels = list(bquote(psi == "(2,4)"), bquote(psi == "(4,8)"), bquote(psi == "(6,12)"), bquote(psi == "(8,16)"))
-)
-
-#dev.off()
-```
-
-
-Une tentative de la régression logistique inverse sur données gaussiennes, qui fonctionne bien, insensible aux conditions initiales. 
-```{r}
-
-rev_log_reg_gaussien = function(n1,n2,n3){
-  
-  pm1 = function(u){return(exp(-0.5 * ((u)**2)))} #connu
-  pm2 = function(u,theta){return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))} #inconnu normalisation
-  pm3 = function(u,theta){return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))} #inconnu normalisation
-  
-  x1 = rnorm(n1)
-  x2 = rnorm(n2,5,3) # les paramètres sont (5,3) - psi 
-  x3 = rnorm(n3,-2,6) # chi
-  n  = n1+n2+n3
-  
-  ## ATTENTION A BIEN MATCHER LES PARAMETRES PSI ET CHI AVEC LES TIRAGES X1,X2 ##
-  psi = c(5,3)
-  chi = c(-2,6) 
-  
-  # calcul des probabilités p_j
-  denom = function(sample, eta) {return(pm1(sample)*exp(eta[1]) + pm2(sample,psi)*exp(eta[2]) + pm3(sample,chi)*exp(eta[3]))}
-  
-  p_1 = function(sample, eta){return (pm1(sample)*exp(eta[1]) / denom(sample, eta))}
-  p_2 = function(sample, eta){return (pm2(sample, psi)*exp(eta[2]) / denom(sample, eta))}
-  p_3 = function(sample, eta){return (pm3(sample, chi)*exp(eta[3]) / denom(sample, eta))}
-  
-  # fonction objectif
-  L = function(eta){return(sum(log(p_1(x1, eta))) + sum(log(p_2(x2, eta))) + sum(log(p_3(x3, eta))))}
-  
-  # initialisation descente de gradient
-  eta1 =  -log(sd(x1)*sqrt(2*pi)) + log(n1/n) +100
-  eta2 =  -log(sd(x2)*sqrt(2*pi)) + log(n2/n) +34
-  eta3 =  -log(sd(x3)*sqrt(2*pi)) + log(n3/n) -45
-  
-  # optimisation
-  eta = optim(par = c(eta1,eta2,eta3),gr = "CG",control = list(fnscale=-1),fn = L)$par
-  
-  constante_additive = eta[1] + log(sqrt(2*pi)) - log(n1/n)
-  a = exp(-eta[1] + log(n1/n) + constante_additive) #valeur témoin / vrai valeur connue = 1
-  b = exp(-eta[2] + log(n2/n) + constante_additive) # normlisation de linconnu
-  c = exp(-eta[3] + log(n3/n) + constante_additive) # normlisation de linconnu
-  
-  x = c(a,b,c,constante_additive)
-  
-  return (x)
-}
-
-
-rev_log_reg_gaussien(10000,10000,10000)
-c(sqrt(2*pi*1),sqrt(2*pi*9),sqrt(2*pi*36)) # pour comparer a,b,c aux vraies constantes de normalisations
-```
-
-\subsection{Reverse logistic regression : deux lois de familles différentes}
-
-On reprend les notations ci-dessus (notations du papier). Exemple avec $m=2$, $n = n_1 + n_2$, et pour coller avec les méthodes différentes on va prendre $h_1$ la densité non normalisée d'une $\mathscr{N}(\alpha)$ dont on a estimé $\alpha$ par MC MLE et $h_2$ la densité d'une loi usuelle, on en connait donc la constante de normalisation. On note $\psi$ le paramètre de cette loi usuelle. 
-```{r}
-rev_log_reg_with_noise = function(x, law_noise, n, alpha, psi, h1, h2){
-  
-  y = do.call(law_noise, c(list(n),psi))
-  m = length(x)
-  
-  # calcul des probabilités p_j
-  denom = function(sample, eta) {
-    return(h1(sample, alpha)*exp(eta[1]) + h2(sample,psi)*exp(eta[2]))}
-  p_1 = function(sample, eta){
-    return (h1(sample, alpha)*exp(eta[1]) / denom(sample, eta))}
-  p_2 = function(sample, eta){
-    return (h2(sample, psi)*exp(eta[2]) / denom(sample, eta))}
-  
-  # fonction objectif
-  L = function(eta) {
-    return(sum(log(p_1(x, eta))) + sum(log(p_2(y, eta))))}
-  
-  # initialisation descente de gradient
-  eta1 = -log(sd(x)*sqrt(2*pi)) + log(m/(m+n))
-  eta2 = -log(sd(y)*sqrt(2*pi)) + log(n/(m+n))
-  
-  # optimisation
-  const = optim(
-    par = c(eta1,eta2),
-    gr = "CG",
-    control = list(fnscale=-1),
-    fn = L
-  )$par
-  
-  constante_additive = const[1] + log(512) - log(1/2)
-  
-  b = exp(-const[2] + log(n/(m+n)) + constante_additive)
-  a = exp(-const[1] + log(m/(m+n)) + constante_additive)
-  
-  return(c(a,b,const[1],const[2], log(0.5), log(512) - log(0.5), constante_additive))
-}
-```
-
-```{r rev_log_reg_noise init}
-pm_barre = function(u, theta){
-  return(exp(-0.5 * ((u - theta[1]) / theta[2]) ** 2))
 }
 
 pn_cauchy = function(u, psi){
@@ -924,143 +382,676 @@ pn_unif = function(u, psi){
   return(dunif(u, psi[1], psi[2]))
 }
 
-m = 1000
-n = 10000
-x = rnorm(m,2,4)
-psi = c(mean(x), sd(x))
+log_pn_cauchy = function(u,psi){
+  return(log(dcauchy(u, psi[1], psi[2])))
+}
 
-#alpha = mc_mle(x, n, psi, pm_barre)
-```
+log_pn_unif = function(u,psi){
+  return(log(dcauchy(u, psi[1], psi[2])))
+}
 
-```{r}
-rev_log_reg_with_noise(x, rcauchy, n, c(2,4), c(mean(x),sd(x)), pm_barre, pn_cauchy)
-```
+#------------- CHOIX DES DIMENSIONS ET DES PARAMETRES --------------------------
 
-```{r eval=FALSE, include=FALSE}
-df_rev_log_reg_noise = data.frame(matrix(ncol = 4, nrow = 0))
-colnames(df_rev_log_reg_noise) = c("const", "size_data", "ratio_noise_data", "law_noise")
-
-M = c(1000, 5000, 10000, 15000)
-N = c(1, 10)
+m = 10000
+n = 100000
+x = rnorm(m, 2, 4)
 alpha = c(2,4)
+psi = c(mean(x), sd(x))
+psi2 = c(min(x), max(x))
+size_theta = 3
 
-for (m in M){
-  x = rnorm(m, 2, 4)
-  for (n in N) {
-    for (i in 1:1000) {
-       df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, rcauchy, n*m, alpha, alpha, pm_barre, pn_cauchy), m, n, "cauchy")
-    }
-    for (i in 1:1000) {
-       df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, rnorm, n*m, alpha, alpha, pm_barre, pn_norm), m, n, "normale")
-    }
-    for (i in 1:1000) {
-       df_rev_log_reg_noise[nrow(df_rev_log_reg_noise) + 1, ] = c(rev_log_reg_with_noise(x, runif, n*m, alpha, c(min(x),max(x)), pm_barre, pn_unif), m, n, "unif")
+#------------- METHODE MC MLE --------------------------------------------------
+mc_mle(x, n, psi, pm_barre)
+
+#------------- METHODE REGRESSION LOGISTIQUE INVERSE ---------------------------
+rev_log_reg(x, rcauchy, n, alpha, psi, pm_barre, pn_cauchy)
+
+#------------- METHODE NOISE CONTRASTIVE ESTIMATION ----------------------------
+# METHODE NCE
+nce(x, rcauchy, psi, log_pm, log_pn_cauchy, size_theta, n)
+```
+
+\subsection{Graphiques}
+
+Nous allons à présent réaliser plusieurs graphiques pour chaque méthode afin d'étudier l'impact du choix des paramètres et dimensions. Les données sont tirées des fichiers .csv que nous avons préalablement générés. Les fichiers .csv sont disponibles dans le dossier __/dataframes__ du github. 
+
+Les graphiques obtenus sont expliqués et commentés dans le manuscrit du mémoire. $\\$
+
+```{r eval=FALSE}
+'
+
+#------------- CREATION DES CSV POUR LES GRAPHIQUES ----------------------------
+
+RATIO = c(1, 10)
+M1 = c(1000, 10000)
+M2 = c(1000, 10000, 100000)
+M3 = c(1000, 5000, 10000, 15000)
+
+#------------- DF_MCMLE --------------------------------------------------------
+
+df_mcmle = data.frame(matrix(ncol = 4, nrow = 0))
+colnames(df_mcmle) = c("param_1", "param_2", "size_data", "ratio_noise_data")
+
+for (m in M1){
+
+  x_csv = rnorm(m, 2, 4)
+  
+  for (r in RATIO) {
+    for (i in 1:100) {
+    
+       df_mcmle[nrow(df_mcmle) + 1, ] = c(mc_mle(x_csv, m*r, psi, pm_barre), m, r)
+       
     }
   }
 }
 
-write.csv(df_rev_log_reg_noise, "dataframes/df_rev_log_reg_noise.csv")
+write.csv(df_mcmle, "df_mcmle.csv", row.names = FALSE)
+
+#------------- DF_MCMLE_PSI ----------------------------------------------------
+
+df_mcmle_psi = data.frame(matrix(ncol = 3, nrow = 0))
+colnames(df_mcmle_psi) = c("param_1", "param_2", "ratio_alpha_psi")
+
+for (r in c(1,3,5,7)){
+  for (i in 1:100) {
+  
+     df_mcmle_psi[nrow(df_mcmle_psi) + 1, ] = c(mc_mle(x, n, c(2*r, 4*r), pm_barre), r)
+     
+  }
+}
+
+write.csv(df_mcmle_psi, "dataframes/df_mcmle_psi.csv", row.names = FALSE)
+
+#------------- DF_NCE ----------------------------------------------------------
+
+df_nce = data.frame(matrix(ncol = 5, nrow = 0))
+colnames(df_nce) = c("param_1", "param_2", "const", "size_data", "ratio_noise_data")
+
+for (m in M2){
+
+  x_csv = rnorm(m, 2, 4)
+  
+  for (r in RATIO) {
+    for (i in 1:50) {
+    
+       df_nce[nrow(df_nce) + 1, ] = c(nce(x_csv, rcauchy, psi, log_pm, log_pn_cauchy, size_theta, m*r), m, r)
+       
+    }
+  }
+}
+write.csv(df_nce, "dataframes/df_nce.csv", row.names = FALSE)
+
+#------------- DF_NCE_NOISES ---------------------------------------------------
+
+df_nce_noises = data.frame(matrix(ncol = 4, nrow = 0))
+colnames(df_nce_noises) = c("param_1", "param_2", "const", "law")
+
+for (i in 1:100) {
+
+   df_nce_noises[nrow(df_nce_noises) + 1, ] = c(nce(x, runif, psi2, log_pm, log_pn_unif, size_theta, n), "uniforme")
+   
+}
+for (i in 1:100) {
+
+   df_nce_noises[nrow(df_nce_noises) + 1, ] = c(nce(x, rcauchy, psi, log_pm, log_pn_cauchy, size_theta, n), "cauchy")
+   
+}
+
+write.csv(df_nce_noises, "dataframes/df_nce_noises.csv", row.names = FALSE)
+
+#------------- DF_REV_LOG_REG_NAIVE---------------------------------------------
+
+df_rev_log_reg_naive = data.frame(matrix(ncol = 4, nrow = 0))
+colnames(df_rev_log_reg_naive) = c("const", "size_data", "ratio_noise_data", "ratio_alpha_psi")
+
+for (m in M3){
+
+  x = rnorm(m, 2, 4)
+  
+  for (r in RATIO) {
+    for (coef in 1:4) {
+      for (i in 1:15) {
+      
+         df_rev_log_reg_naive[nrow(df_rev_log_reg_naive) + 1, ] = c(rev_log_reg_naive(x, alpha, r*m, alpha*coef, pm_barre, 2), m, r, coef)
+         
+      }
+    }
+  }
+}
+
+write.csv(df_rev_log_reg_naive, "dataframes/df_rev_log_reg_naive.csv", row.names = FALSE)
+
+#------------- DF_REV_LOG_REG --------------------------------------------------
+
+df_rev_log_reg = data.frame(matrix(ncol = 4, nrow = 0))
+colnames(df_rev_log_reg) = c("const", "size_data", "ratio_noise_data", "law_noise")
+
+for (m in M3){
+
+  x = rnorm(m, 2, 4)
+  
+  for (r in RATIO) {
+    for (i in 1:1000) {
+    
+       df_rev_log_reg[nrow(df_rev_log_reg) + 1, ] = c(df_rev_log_reg(x, rcauchy, r*m, alpha, alpha, pm_barre, pn_cauchy), m, r, "cauchy")
+       
+    }
+    for (i in 1:1000) {
+    
+       df_rev_log_reg[nrow(df_rev_log_reg) + 1, ] = c(df_rev_log_reg(x, rnorm, r*m, alpha, alpha, pm_barre, pn_norm), m, r, "normale")
+       
+    }
+    for (i in 1:1000) {
+    
+       df_rev_log_reg[nrow(df_rev_log_reg) + 1, ] = c(df_rev_log_reg(x, runif, r*m, alpha, psi2, pm_barre, pn_unif), m, r, "unif")
+       
+    }
+  }
+}
+
+write.csv(df_rev_log_reg, "dataframes/df_rev_log_reg.csv", row.names = FALSE)
+
+'
 ```
 
-```{r message = FALSE}
-df_rev_log_reg_noise <- read_csv("dataframes/df_rev_log_reg_noise.csv")[,-1]
 
+```{r message=FALSE}
+#------------- METHODE MC MLE : ETUDE DES DIMENSIONS ---------------------------
+
+df_mcmle <- read_csv("dataframes/df_mcmle.csv")
+df_mcmle$size_data = as.factor(df_mcmle$size_data)
+df_mcmle$ratio_noise_data = as.factor(df_mcmle$ratio_noise_data)
+df_mcmle_filt = subset(df_mcmle, param_2 <= 6 & param_2 >= 0 & param_1 >= -2 & param_1 <= 6)
+
+ggplot(df_mcmle_filt, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + 
+  geom_point(size = 2) + 
+  scale_color_manual(values = pal2) + labs(shape="Ratio (n/m) : ", col="Taille de l'échantillon (m) : ") + 
+  xlab(expression(mu)) + 
+  ylab(expression(sigma)) + 
+  theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + 
+  geom_vline(xintercept = 2, linetype="dotted") + 
+  geom_hline(yintercept = 4, linetype="dotted") + 
+  ggtitle("MC MLE : étude du choix des dimensions")
+
+#------------- METHODE MC MLE : ETUDE DE PSI -----------------------------------
+
+df_mcmle_psi <- read_csv("dataframes/df_mcmle_psi.csv")
+df_mcmle_psi = df_mcmle_psi[order(-df_mcmle_psi$ratio_alpha_psi),]
+df_mcmle_psi$ratio_alpha_psi = as.factor(df_mcmle_psi$ratio_alpha_psi)
+
+lab = list(bquote(psi == "(2,4)"), bquote(psi == "(6,12)"), bquote(psi == "(10,20)"), bquote(psi == "(14,28)"))
+
+ggplot(df_mcmle_psi, aes(x = param_1, y = param_2, color = ratio_alpha_psi)) + 
+  geom_point(size = 2) + 
+  scale_color_manual(values = pal4, labels = lab) + 
+  labs(col=" ") + 
+  xlab(expression(mu)) + 
+  ylab(expression(sigma)) + 
+  theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + 
+  geom_vline(xintercept = 2, linetype="dotted") + 
+  geom_hline(yintercept = 4, linetype="dotted") + 
+  ggtitle("MC MLE : étude du choix de psi")
+
+#------------- METHODE REGRESSION LOGISTIQUE NAIVE -----------------------------
+
+df_rev_log_reg_naive <- read_csv("dataframes/df_rev_log_reg_naive.csv")
+df_rev_log_reg_naive_agg = aggregate(const ~ size_data + ratio_noise_data + ratio_alpha_psi,
+                    data = df_rev_log_reg_naive,
+                    FUN = mean)
+df_rev_log_reg_naive_agg$ratio_alpha_psi = as.factor(df_rev_log_reg_naive_agg$ratio_alpha_psi)
+df_rev_log_reg_naive_agg$ratio_noise_data = as.factor(df_rev_log_reg_naive_agg$ratio_noise_data)
+df_rev_log_reg_naive_agg$size_data = as.numeric(df_rev_log_reg_naive_agg$size_data)
+df_rev_log_reg_naive_agg$const_error = abs(df_rev_log_reg_naive_agg$const - 4*sqrt(2*pi))
+
+
+ggplot(df_rev_log_reg_naive_agg, aes(x = size_data, y = const_error, color = ratio_alpha_psi, shape = ratio_noise_data)) + 
+  geom_line() + 
+  geom_point() + 
+  labs(shape="Ratio (n/m) : ", col="Choix du paramètre : ") + 
+  xlab("Taille de l'échantillon X") + 
+  ylab("Erreur moyenne") + 
+  theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + 
+  scale_color_manual(values = pal4, labels = list(bquote(psi == "(2,4)"), bquote(psi == "(4,8)"), bquote(psi == "(6,12)"), bquote(psi == "(8,16)"))) +
+  ggtitle("Regression logistique inverse naïve : étude du choix de psi et du ratio")
+
+
+#------------- METHODE REGRESSION LOGISTIQUE INVERSE ---------------------------
+
+df_rev_log_reg <- read_csv("dataframes/df_rev_log_reg.csv")
 df_rev_log_reg_agg = aggregate(const ~ size_data + ratio_noise_data + law_noise,
-                    data = df_rev_log_reg_noise,
+                    data = df_rev_log_reg,
                     FUN = mean)
 df_rev_log_reg_agg$ratio_noise_data = as.factor(df_rev_log_reg_agg$ratio_noise_data)
 df_rev_log_reg_agg$size_data = as.numeric(df_rev_log_reg_agg$size_data)
 df_rev_log_reg_agg$const_error = abs(df_rev_log_reg_agg$const - 4*sqrt(2*pi))
 
-#png('df_rev_log_reg_noise.png', units="cm", width=15, height=11, res=300)
+ggplot(df_rev_log_reg_agg, aes(x = size_data, y = const_error, color = law_noise, shape = ratio_noise_data)) + 
+  geom_line() + 
+  geom_point() + 
+  scale_color_manual(values = pal3, labels = c(expression(Cauchy(m[emp],sd[emp])), expression(Normale(m[emp],sd[emp])), expression(Uniforme(X[min],X[max])))) + 
+  xlab("Taille de l'échantillon X") + 
+  ylab("Erreur moyenne") + 
+  theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + 
+  labs(shape="Ratio (n/m) : ", col="Bruit : ") +
+  ggtitle("Regression logistique inverse : étude du choix de la loi du bruit et du ratio")
 
-ggplot(df_rev_log_reg_agg, aes(x = size_data, y = const_error, color = law_noise, shape = ratio_noise_data)) + geom_line() + geom_point() + scale_color_manual(values = pal3, labels = c(expression(Cauchy(m[emp],sd[emp])), expression(Normale(m[emp],sd[emp])), expression(Uniforme(X[min],X[max])))) + xlab("Taille de l'échantillon X") + ylab("Erreur moyenne") + theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + labs(shape="Ratio (n/m) : ", col="Bruit : ")
 
-#dev.off()
+#------------- METHODE NCE : ETUDE DES DIMENSIONS ------------------------------
+
+df_nce <- read_csv("dataframes/df_nce.csv")
+df_nce$size_data = as.factor(df_nce$size_data)
+df_nce$ratio_noise_data = as.factor(df_nce$ratio_noise_data)
+df_nce$const_error = abs(df_nce$const - 4*sqrt(2*pi))
+
+ggplot(df_nce, aes(x = param_1, y = param_2, color = size_data, shape = ratio_noise_data)) + 
+  geom_point(size = 2) + 
+  scale_color_manual(values = pal3) + 
+  labs(shape="Ratio (n/m) : ", col="Taille de l'échantillon (m) : ") + 
+  xlab(expression(mu)) + 
+  ylab(expression(sigma)) + 
+  theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + 
+  geom_vline(xintercept = 2, linetype="dotted") + 
+  geom_hline(yintercept = 4, linetype="dotted") + 
+  ggtitle("NCE : étude du choix des dimensions sur le paramètre")
+
+ggplot(df_nce, aes(x = size_data, y = const_error, color = ratio_noise_data)) + geom_boxplot() + scale_color_manual(values = pal2) + labs(col="Ratio (n/m) : ") + xlab("Taille de l'échantillon (m)") + ylab("Erreur") + ggtitle("NCE : étude du choix des dimensions sur la constante de normalisation")
+
+#------------- METHODE NCE : ETUDE DES DIMENSIONS ------------------------------
+
+df_nce_noises <- read_csv("dataframes/df_nce_noises.csv")
+df_nce_noises$const_error = abs(df_nce_noises$const - 4*sqrt(2*pi))
+
+ggplot(df_nce_noises, aes(x = param_1, y = param_2, color = law)) + 
+  geom_point(size = 2) + 
+  scale_color_manual(values = pal2, labels = c(expression(Cauchy(m[emp],sd[emp])), expression(Uniforme(X[min],X[max])))) + 
+  labs(col="Loi du bruit : ") + 
+  xlab(expression(mu)) + 
+  ylab(expression(sigma)) + 
+  theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) + 
+  geom_vline(xintercept = 2, linetype="dotted") + 
+  geom_hline(yintercept = 4, linetype="dotted") + 
+  ggtitle("NCE : étude du choix de la loi du bruit")
+
+```
+\subsection{Bootstrap}
+
+On calcule maintenant les intervalles de confiance des estimateurs de chaque méthode avec du bootstrap.  Les données sont tirées des fichiers .csv que nous avons préalablement générés. Les fichiers .csv sont disponibles dans le dossier __/dataframes__ du github. $$\\$$
+
+```{r eval=FALSE}
+' 
+#------------- CREATION DES CSV ------------------------------------------------
+
+# Calcul de {size_boot} estimateurs par bootstrap pour la méthode NCE
+
+NCE_bootstrap = function(x, generate_y, psi, log_pm, log_pn, size_theta, n, size_boot) {
+  m = length(x)
+  theta_bootstrap = c()
+  x_bootstrap = x
+  for (i in 1:size_boot) {
+    theta_bootstrap = append(theta_bootstrap, nce(x_bootstrap, 
+                                                  generate_y, 
+                                                  psi, 
+                                                  log_pm, 
+                                                  log_pn, 
+                                                  size_theta, 
+                                                  n))
+    x_bootstrap = sample(x, size = m, replace=TRUE)
+  }
+  return(matrix(theta_bootstrap, nrow = size_theta))
+}
+
+# Calcul de {size_boot} estimateurs par bootstrap pour la méthode MC MLE
+
+MCMLE_bootstrap = function(x, n, psi, pm_barre, size_boot) {
+  m = length(x)
+  theta_bootstrap = c()
+  x_bootstrap = x
+  for (i in 1:size_boot) {
+    theta_bootstrap = append(theta_bootstrap, mc_mle(x_bootstrap, 
+                                                  n, 
+                                                  psi, 
+                                                  pm_barre))
+    x_bootstrap = sample(x, size = m, replace=TRUE)
+  }
+  return(matrix(theta_bootstrap, nrow = 2))
+}
+
+# Calcul de {size_boot} estimateurs par bootstrap pour la méthode regression logistique inverse
+
+RLI_bootstrap = function(x, generate_y, n, alpha, psi, pm_barre, pn_barre, size_boot) {
+  m = length(x)
+  theta_bootstrap = c()
+  x_bootstrap = x
+  for (i in 1:size_boot) {
+    theta_bootstrap = append(theta_bootstrap, rev_log_reg_with_noise(x_bootstrap, 
+                                                  generate_y,
+                                                  n, 
+                                                  alpha,
+                                                  psi, 
+                                                  pm_barre,
+                                                  pn_barre))
+    x_bootstrap = sample(x, size = m, replace=TRUE)
+  }
+  return(matrix(theta_bootstrap, nrow = 1))
+}
+
+
+df_nce_bootstrap = NCE_bootstrap(x, rcauchy, psi, log_pm, log_pn_cauchy, 3, n, 100)
+write.csv(as.data.frame(df_nce_bootstrap), "dataframes/df_nce_bootstrap.csv")
+
+df_mcmle_bootstrap = MCMLE_bootstrap(x, n, psi, pm_barre, 100)
+write.csv(as.data.frame(df_mcmle_bootstrap), "dataframes/df_mcmle_bootstrap.csv")
+
+df_rli_bootstrap = RLI_bootstrap(x, rcauchy, n, alpha, psi, pm_barre, pn_cauchy, 100)
+write.csv(as.data.frame(df_rli_bootstrap), "dataframes/df_rli_bootstrap.csv")
+'
 ```
 
 
+```{r}
+#------------- BOOTSTRAP -------------------------------------------------------
+
+bootstrap = function(matrix, a){
+  if(dim(matrix)[1] == 1) {
+    df = data.frame(
+      theta = matrix[,1],
+      biais = rowMeans(matrix) - matrix[,1],
+      IC_inf = rowQuantiles(matrix, probs = c(a/2)),
+      IC_sup = rowQuantiles(matrix, probs = c(1-a/2))
+    )
+    rownames(df) <- NULL
+    return(df)
+  }
+  return(data.frame(
+    theta = matrix[,1],
+    biais = rowMeans(matrix) - matrix[,1],
+    IC = rowQuantiles(matrix, probs = c(a/2, 1-a/2))
+  ))
+}
+
+a = 0.05
+
+#------------- MC MLE ----------------------------------------------------------
+
+df_mcmle_bootstrap = read.csv("dataframes/df_mcmle_bootstrap.csv")[-1]
+df_mcmle_bootstrap = data.matrix(df_mcmle_bootstrap, rownames.force = NA)
+kable(bootstrap(df_mcmle_bootstrap, a))
+
+#------------- REGRESSION LOGISTIQUE INVERSE -----------------------------------
+
+df_rli_bootstrap = read.csv("dataframes/df_rli_bootstrap.csv")[-1]
+df_rli_bootstrap = data.matrix(df_rli_bootstrap, rownames.force = NA)
+kable(bootstrap(df_rli_bootstrap, a))
+
+#------------- NCE -------------------------------------------------------------
+
+df_nce_bootstrap = read.csv("dataframes/df_nce_bootstrap.csv")[-1]
+df_nce_bootstrap = data.matrix(df_nce_bootstrap, rownames.force = NA)
+kable(bootstrap(df_nce_bootstrap, a))
+
+```
+
+
+\subsection{Approche récursive naïve pour la méthode MC MLE}
+
+Idée : améliorer récursivement la précision de la méthode MC MLE en initialisant itération après itération $\psi$ par la précédente estimation de $\alpha^*$. 
+
+Bilan : cette idée naïve n'améliore pas la précision. 
+
+```{r eval=FALSE}
+'
+#------------- CREATION DU CSV RECURSIF NAIF -----------------------------------
+
+df_recurs_naive = data.frame(matrix(ncol = 3, nrow = 0))
+colnames(df_recurs_naive) = c("iteration", "param_1", "param_2")
+
+psi_init = c(20,20)
+
+for (i in 1:30) {
+  psi_init = mc_mle(x, n, psi_init, pm_barre)
+  df_recurs_naive[nrow(df_recurs_naive) + 1, ] = c(i, psi_init)
+}
+
+write.csv(df_recurs_naive, "dataframes/df_recurs_naive.csv", row.names = FALSE)
+'
+```
+
+```{r message = FALSE}
+
+#------------- IMPORT DU CSV RECURSIF NAIF -------------------------------------
+df_recurs_naive <- read_csv("dataframes/df_recurs_naive.csv")
+colnames(df_recurs_naive) = c("iteration", "param_1", "param_2")
+df_recurs_naive_melted = melt(df_recurs_naive, id.vars = "iteration")
+
+#------------- GRAPHIQUE -------------------------------------------------------
+
+lab = list(bquote(mu), bquote(sigma))
+
+ggplot(df_recurs_naive_melted, aes(x = iteration, y = value)) + 
+  geom_line(aes(color = variable, group = variable)) + 
+  scale_color_manual(values = pal2, labels = lab) + 
+  labs(col="Paramètres : ") + 
+  ylab("Valeurs des paramètres") + 
+  xlab("Itérations") + 
+  geom_hline(yintercept = 2, linetype="dotted") + 
+  geom_hline(yintercept = 4, linetype="dotted")  + 
+  theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) +
+  ggtitle("Récursivité : approche naïve")
+
+```
+
+\subsection{Approche récursive avec loi de mélange pour la méthode MC MLE}
+
+Utilité : améliorer récursivement la précision de la méthode MC MLE en utilisant pour le bruit une loi de mélange des précédentes lois utilisées pour le bruit. Voir la méthode détaillée dans le mémoire.
+
+```{r results = 'hide'} 
+
+#------------- MCMLE RECURSIF AVEC LOI DE MELANGE ------------------------------
+
+# Entrées : mêmes notations que pour la méthode MCMLE
+
+# Sortie : une matrice comprenant l'ensemble des estimations réalisées au cours des itérations
+# la dernière ligne de la matrice correspond au paramètre recherché
+
+mc_mle_recursif = function(x, n, psi, h, iterations){
+  m = length(x)
+  
+  # la matrice PSI contiendra les estimations de alpha* réalisées au fil des itérations
+  # la loi de mélange en dépend intégralement de PSI
+  
+  PSI = matrix(ncol = length(psi), nrow = iterations + 1)
+  PSI[1, ] = psi
+
+  # initialisation de l\'échantillon de bruit
+  
+  Y = c(hasting(x, n, psi, h))
+
+  for (i in 1:iterations) {
+  
+    # définition de la loi de mélange
+    # il s\'agit du mélange des lois h(.,psi) pour toutes les valeurs de psi dans le vecteur PSI
+    
+    law_mix_h = function(x, PSI){
+      size_x = length(x)
+      
+      mix = matrix(rep(0, size_x*(i+1)), ncol = size_x, nrow = i+1)
+      
+      for (j in 1:i){
+        mix[j,] = h(x, PSI[j,])
+      }
+      
+      return(colSums(mix) / i)
+    }
+
+    # définition de la fonction objectif
+    
+    L = function(theta){
+      return(sum(log(h(x,theta)/law_mix_h(x,PSI))) - m*log(mean(h(Y,theta)/law_mix_h(Y,PSI))))
+    }
+    
+    # on rajoute au vecteur PSI la dernière estimation réalisée
+    
+    PSI[i+1, ] = optim(
+      par = rep(1,length(psi)),
+      gr = "CG",
+      control = list(fnscale=-1),
+      fn = L
+    )$par
+    
+    # on rajoute à l\'échantillon du bruit un nouveau tirage selon la loi h de paramètre PSI[i+1,]
+    
+    Y = append(Y, hasting(x, n, PSI[i+1,], h))
+  }
+
+  return(PSI)
+}
+
+'
+#------------- CREATION DU CSV RECURSIF AVEC LOI DE MELANGE --------------------
+
+df_recurs = data.frame(mc_mle_recursif(x, n, c(20,20), pm_barre, 30))[-1,]
+df_recurs$iteration = 1:30
+colnames(df_recurs) = c("param_1", "param_2","iteration")
+
+write.csv(df_recurs, "dataframes/df_recurs.csv", row.names = FALSE)
+'
+```
+
+```{r message = FALSE}
+
+#------------- IMPORT DU CSV RECURSIF ------------------------------------------
+
+df_recurs <- read_csv("dataframes/df_recurs.csv")
+colnames(df_recurs) = c("param_1", "param_2","iteration")
+df_recurs_melted = melt(df_recurs, id.vars = "iteration")
+
+#------------- GRAPHIQUE -------------------------------------------------------
+
+lab = list(bquote(mu), bquote(sigma))
+ggplot(df_recurs_melted, aes(x = iteration, y = value)) + 
+  geom_line(aes(color = variable, group = variable)) + 
+  scale_color_manual(values = pal2, labels = lab) + 
+  labs(col="Paramètres : ") + 
+  ylab("Valeurs des paramètres") + 
+  xlab("Itérations") + geom_hline(yintercept = 2, linetype="dotted") + 
+  geom_hline(yintercept = 4, linetype="dotted")  + 
+  theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) +
+  ggtitle("Récursivité : approche avec loi de mélange")
+
+```
+
 
 \newpage
-\section{Application : Modèle d'Ising}
+\section{Application au modèle d'Ising}
 
-\subsection{Simulation en 2D}
+\subsection{Simulation du modèle d'Ising}
 
-Algorithme de Gibbs : on part d'une configuration aléatoire. A chaque itération, on sélectionne un site $\sigma_j$ au hasard. Ce site prend la valeur 1 avec probabilité $p := \mathbb{P}(\sigma_j = 1 | \sigma_{-j})$ et -1 avec probabilité $1-p$. $\sigma_{-j}$ est une notation qui désigne les voisins de $\sigma_j$.
-
-On a $p = \frac{1}{1 + exp(\beta \Delta H)}$ avec $\Delta H = 2\sigma_j\sum_j\sigma_{-j}$.
+Afin de générer des configurations du modèle d'Ising, nous allons dans un premier temps définir des fonctions permettant d'initialiser l'algorithme de Gibbs, d'extraire les voisins d'un site, de calculer l'énergie et la variation de l'énergie.
 
 ```{r}
-# Simuler une matrice uniforme
+
+#------------- INITIALISATION --------------------------------------------------
+
+# But : Simule uniformément une matrice de taille height * width composée de -1 et 1
+# chaque élément est tiré par une loi uniforme discrète sur {-1,1}
+
+# Sortie : matrice de "height" lignes et "width" colonnes
+
 sim_unif_2D = function(height, width){
   return(matrix(sample(c(-1,1), height * width, replace=T), ncol = width))
 }
 
-# Empiler verticalement plusieurs matrices uniformes
+# But : Simule uniformément un échantillon de n matrices de taille height * width composées de -1 et 1
+
+# Sortie : matrice de "n * height" lignes et "width" colonnes
+
 samples_unif_2D = function(n, height, width){
   return(sim_unif_2D(n * height, width))
 }
 
-# Sélection des voisins, dans l'ordre haut - droite - bas - gauche
+#------------- VOISINS ---------------------------------------------------------
 
-get_neighbors = function(sample, row_site, col_site){
-  height = dim(sample)[1]
-  width = dim(sample)[2]
+# But : pour une configuration "config" donnée et un site identifié par son numéro de ligne "row_site"
+# et son numéro de colonne "col_site", on cherche les spins voisins
 
-  if (height == 1){
+# Sortie : un vecteur avec les spins voisins dans l'ordre HAUT, DROITE, BAS, GAUCHE. 
+# Le spin vaut 0 s'il n'existe pas
+
+get_neighbors = function(config, row_site, col_site){
+  height = dim(config)[1]
+  width = dim(config)[2]
+
+  if (row_site == 1){
     up = 0
-    down = 0
-  }
-  else if (row_site == 1){
-    up = 0
-    down = sample[row_site + 1,col_site]
+    down = config[row_site + 1,col_site]
   } 
   else if (row_site == height) {
-    up = sample[row_site - 1,col_site]
+    up = config[row_site - 1,col_site]
     down = 0
   }
   else {
-    up = sample[row_site - 1,col_site]
-    down = sample[row_site + 1,col_site]
+    up = config[row_site - 1,col_site]
+    down = config[row_site + 1,col_site]
   }
-  if (width == 1){
+  if (col_site == 1){
     left = 0
-    right = 0
-  }
-  else if (col_site == 1){
-    left = 0
-    right = sample[row_site, col_site + 1]
+    right = config[row_site, col_site + 1]
   } 
   else if (col_site == width) {
-    left = sample[row_site, col_site - 1]
+    left = config[row_site, col_site - 1]
     right = 0
   }
   else {
-    left = sample[row_site, col_site - 1]
-    right = sample[row_site, col_site + 1]
+    left = config[row_site, col_site - 1]
+    right = config[row_site, col_site + 1]
   }
   
   return(c(up, right, down, left))
 }
 
-# Calcul de l'énergie
+#------------- ENERGIE ---------------------------------------------------------
 
-compute_energy = function(sample, height, width){
+# But : calculer l'énergie d'une configuration "config" de taille "height" et de largeur "width".
+
+# Sortie : un entier
+
+compute_energy = function(config, height, width){
   energy = 0
   for (i in 1:height){
     for (j in 1:width){
-      energy = energy - sample[i,j]*sum(get_neighbors(sample, i, j))
+      energy = energy - config[i,j]*sum(get_neighbors(config, i, j))
     }
   }
+  # on divise par deux pour ne pas compter en double les voisins
   return(energy/2)
 }
   
-compute_delta_energie = function(sample, row_site, col_site){
-  spin = sample[row_site, col_site]
-  return(2 * spin * sum(get_neighbors(sample, row_site, col_site)))
-}
 
-# Simulation
+# But : calcule la différence d'énergie entre une config initiale et 
+# cette même config où le spin à la ligne "row_site" et colonne "col_site" a changé de signe 
+
+# Sortie : un entier
+
+compute_delta_energie = function(config, row_site, col_site){
+  spin = config[row_site, col_site]
+  return(2 * spin * sum(get_neighbors(config, row_site, col_site)))
+}
+```
+
+Nous implémentons à présent une fonction permettant de simuler une configuration issue du modèle d'Ising à partir de l'algorithme de Gibbs : on part d'une configuration aléatoire. A chaque itération, on sélectionne un site $\sigma_{i,j}$ au hasard. Ce site prend la valeur 1 avec probabilité $p := \mathbb{P}(\sigma_{i,j} = 1 | \sigma_{-i,j})$ et -1 avec probabilité $1-p$. $\sigma_{-i,j}$ est une notation qui désigne les voisins de $\sigma_{i,j}$.
+
+On a $p = \frac{1}{1 + exp(\beta \Delta H)}$ avec $\Delta H = 2\sigma_{i,j}\sum_{(k,l)\in-(i,j)}\sigma_{k,l}$.
+
+
+```{r}
+
+#------------- SIMULATION D'UNE CONFIGURATION ----------------------------------
+
+# But : simuler une configuration de hauteur "height" et largeur "width" du modèle d'ising de param "beta"
+# "iter" est le nombre d'iterations effectuées pour supposément atteindre la stationnarité
+# "init" est une configuration initale de taille "height" x "width"
+
+# Sortie : une matrice de taille "height" x "width"
 
 sim_ising_2D = function(beta, height, width, iter, init) {
   config = init
@@ -1072,37 +1063,25 @@ sim_ising_2D = function(beta, height, width, iter, init) {
   }
   return(config)
 }
-
-# Graphique 
-
-graph_config = function(config){
-  height = dim(config)[1]
-  width = dim(config)[2]
-  colnames(config) <- paste("Col", 1:width)
-  rownames(config) <- paste("Row", 1:height)
-  df <- melt(t(config))
-  colnames(df) <- c("x", "y", "value")
-  
-  return(ggplot(df, aes(x = x, y = y, fill = factor(value)))
-         + geom_tile() 
-         + coord_fixed()
-         + scale_fill_manual(values=pal2_bis)
-         + labs(col="Spins : ")
-         + theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.title.x = element_blank(), axis.title.y = element_blank())
-         + theme(legend.position = "none")
-         )
-}
 ```
 
-On va générer un échantillon de $m$ configurations distribuées selon un modèle d'Ising en 2D. Le résultat sera présenté sous la forme d'une matrice verticale où seront empilées les configurations.
+Maintenant que l'on sait simuler une configuration issue du modèle d'Ising, on implémente une fonction qui génère un échantillon i.i.d. de configurations. Pour cela on va continuer à faire tourner l'algorithme de Gibbs après avoir atteint la stationnarité et sélectionner les configurations tous les "epsilon" pas.
 
 ```{r}
+
+#------------- SIMULATION D'UN ECHANTILLON DE CONFIGURATIONS -------------------
+
+# Entrées :
+# beta : paramètre du modèle
+# height, width : taille d'une configuration
+# burn_in : nombre d'itérations pour atteindre la stationnarité
+# epsilon : pas de décorrélation pour sélectionner des configs iid
+# m : nombre de configurations dans notre échantillon
+
+# Sortie : matrice de hauteur m * height et de largeur width
+# autrement dit les configurations sont "empilées" verticalement dans une grande matrice
+
 samples_ising_2D = function(beta, height, width, burn_in, epsilon, m){
-  # beta : paramètre du modèle
-  # height, width : taille d'une configuration
-  # burn_in : nombre d'itérations pour atteindre la stationnarité
-  # epsilon : pas de décorrélation pour sélectionner des configs iid
-  # m : nombre de configurations dans notre échantillon
   
   # initialisation
   current_config = sim_unif_2D(height, width)
@@ -1123,31 +1102,98 @@ samples_ising_2D = function(beta, height, width, burn_in, epsilon, m){
 ```
 
 
-On définit les fonctions $p_n$, $p_m$, etc, pour l'application des méthodes MCMLE, Régression logistique inverse, NCE.
+```{r fig.height = 2}
+
+#------------- VISUALISER EN COULEUR UNE CONFIGURATION -------------------------
+
+graph_config = function(config){
+  
+  height = dim(config)[1]
+  width = dim(config)[2]
+  
+  colnames(config) <- paste("Col", 1:width)
+  rownames(config) <- paste("Row", 1:height)
+  
+  df <- melt(t(config))
+  colnames(df) <- c("x", "y", "value")
+  
+  return(ggplot(df, aes(x = x, y = y, fill = factor(value)))
+         + geom_tile() 
+         + coord_fixed()
+         + scale_fill_manual(values=pal2_bis)
+         + labs(col="Spins : ")
+         + theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.title.x = element_blank(), axis.title.y = element_blank())
+         + theme(legend.position = "none")
+         )
+}
+
+#------------- VISUALISER L'EVOLUTION DE LA CHAINE PENDANT LA PERIODE DE CHAUFFE
+
+beta = 0.5
+height = 10
+width = 20
+
+# on démarre exceptionnellement d'une matrice composée uniquement de -1
+iter0 = matrix(rep(-1, height*width), ncol = width)
+graph_config(iter0)
+
+iter100 = sim_ising_2D(beta, height, width, 100, iter0)
+graph_config(iter100)
+
+iter1000 = sim_ising_2D(beta, height, width, 900, iter100)
+graph_config(iter1000)
+
+iter10000 = sim_ising_2D(beta, height, width, 9000, iter1000)
+graph_config(iter10000)
+
+iter100000 = sim_ising_2D(beta, height, width, 190000, iter10000)
+graph_config(iter100000)
+```
+
+
+\subsection{Application des méthodes MCMLE, NCE et Regression logistique inverse}
 
 ```{r}
-pm_barre_ising = function(samples, alpha){
+#------------- DENSITES NORMALISEES ET NON NORMALISEES NECESSAIRES DANS LES METHODES 
+
+# Entrées :
+# beta : paramètre du modèle
+# samples : échantillon de plusieurs configurations empilées verticalement dans une matrice
+
+# Sortie : densité non normalisée du modèle d'Ising 
+
+pm_barre_ising = function(samples, beta){
+  # vecteur qui contiendra l'énergie de chaque configuration
+  energy_of_each_config = c()
+  # nombre de configurations présentes dans le "samples" en entrée
   m = dim(samples)[1] / height
-  energie_for_each_sample = c()
   for (i in 0:(m-1)){
-    id_beginning_sample = 1+i*height
-    id_end_sample = id_beginning_sample + height - 1
-    energie_for_each_sample = append(energie_for_each_sample, compute_energy(samples[id_beginning_sample:id_end_sample,], height, width))
+    # on selectionne une configuration 
+    id_beginning_config = 1+i*height
+    id_end_config = id_beginning_config + height - 1
+    # on calcule l'énergie de la configuration sélectionnée
+    energy_of_each_config = append(energy_of_each_config, compute_energy(samples[id_beginning_config:id_end_config,], height, width))
   }
-  return(exp(-alpha * energie_for_each_sample))
+  return(exp(-beta * energy_of_each_config))
 }
+
+# Entrées :
+# theta : paramètres du modèle
+# samples : échantillon de plusieurs configurations empilées verticalement dans une matrice
+
+# Sortie : logarithme de la densité du modèle d'Ising 
 
 log_pm_ising = function(samples, theta){
   # theta[1] = beta
   # theta[2] = -log(Z)
   m = dim(samples)[1] / height
-  energie_for_each_sample = c()
+  energy_of_each_config = c()
   for (i in 0:(m-1)){
-    id_beginning_sample = 1+i*height
-    id_end_sample = id_beginning_sample + height - 1
-    energie_for_each_sample = append(energie_for_each_sample, compute_energy(samples[id_beginning_sample:id_end_sample,], height, width))
+    id_beginning_config = 1+i*height
+    id_end_config = id_beginning_config + height - 1
+    energy_of_each_config = append(energy_of_each_config, compute_energy(samples[id_beginning_config:id_end_config,], height, width))
   }
-  return(-theta[1] * energie_for_each_sample + theta[2])
+  return(-theta[1] * energy_of_each_config + theta[2])
 }
 
 pn_discr_unif_2D = function(samples, param){
@@ -1155,70 +1201,38 @@ pn_discr_unif_2D = function(samples, param){
   # param[2] = width
   samples = matrix(t(samples), ncol = param[1] * param[2], byrow = TRUE)
   return(rowProds(ifelse(samples == -1, 1/2, ifelse(samples == 1, 1/2, 0))))
-  #return(1/(2)^(param[1]*param[2]))
 }
 
 log_pn_discr_unif_2D = function(samples){
   return(log(pn_discr_unif_2D(samples, c(height, width))))
 }
-```
 
+#------------- CHOIX DES PARAMETRES ET DIMENSIONS ------------------------------
 
-```{r}
-#---- Constantes pour l'application numérique ----#
-beta = 0.5
-psi = 0.5
-width = 5
-height = 5
+beta = 0
+psi = 0
+width = 20
+height = 10
 burn_in = 100000
 epsilon = 100
 m = 1000
-n = 1000
+n = 10000
 x = samples_ising_2D(beta, height, width, burn_in, epsilon, m)
 y = samples_ising_2D(psi, height, width, burn_in, epsilon, n)
 ```
 
+
+Les fonctions __mc_mle__, __rev_log_reg__ et __nce__ présentées au début de l'annexe sont valables en dimension de taille 1, c'est à dire lorsqu'un point de donnée est un scalaire et que l'échantillon de données forme un vecteur. Nous allons donc les adapter dans cette section puisque le modèle d'Ising est en dimension supérieure.
+
 ```{r}
-# Graphiques pour visualiser l'évolution de la chaine de markov durant la période de chauffe
-
-
-#png('ising_init.png', units="cm", width=7, height=4, res=300)
-test1 = matrix(rep(-1, height*width), ncol = width)
-graph_config(test1)
-#dev.off()
-
-#png('ising_iter100.png', units="cm", width=7, height=4, res=300)
-test2 = sim_ising_2D(beta, height, width, 100, test1)
-graph_config(test2)
-#dev.off()
-
-#png('ising_iter1000.png', units="cm", width=7, height=4, res=300)
-test3 = sim_ising_2D(beta, height, width, 900, test2)
-graph_config(test3)
-#dev.off()
-
-#png('ising_iter10000.png', units="cm", width=7, height=4, res=300)
-test4 = sim_ising_2D(beta, height, width, 9000, test3)
-graph_config(test4)
-#dev.off()
-
-#png('ising_iter100000.png', units="cm", width=7, height=4, res=300)
-test5 = sim_ising_2D(beta, height, width, 100000, test4)
-graph_config(test5)
-#dev.off()
-```
-
-```{r eval=FALSE}
-#------- MC MLE --------------------------------------------------------------------#
+#------- MC MLE ----------------------------------------------------------------
 
 # Fonction objectif
 L = function(alpha){ return(sum(log(pm_barre_ising(x,alpha)/pm_barre_ising(x,psi))) - m*log(mean(pm_barre_ising(y,alpha)/pm_barre_ising(y,psi))))}
 
-optimize(L, c(0,1), maximum = TRUE)$maximum
-```
+print(optimize(L, c(0,1), maximum = TRUE)$maximum)
 
-```{r eval=FALSE}
-#------ Régression logistique inverse ----------------------------------------------#
+#------ Régression logistique inverse ------------------------------------------
 
 # calcul des probabilités p_j
 denom = function(sample, eta) {
@@ -1246,33 +1260,28 @@ const = optim(
 
 # calcul de la constante
 constante_additive = const[2] + log(1) - log(n/(m+n))
-exp(-const[1] + log(m/(m+n)) + constante_additive)
-```
 
-```{r eval=FALSE}
-# ------- NCE --------------------------------------------------------------------------#
+print(exp(-const[1] + log(m/(m+n)) + constante_additive))
+
+# ------- NCE ------------------------------------------------------------------
 
 h = function(u, theta){
     return( 1 / (1 + n/m * exp(log_pn_discr_unif_2D(u) - log_pm_ising(u, theta))))
   }
   
-  J = function(theta){
-    return( sum(log(h(x, theta))) + sum(log(1 - h(y, theta))) )
-  }
+J = function(theta){
+  return( sum(log(h(x, theta))) + sum(log(1 - h(y, theta))) )
+}
 
-  theta = optim(
-    par = c(0,-138),
-    gr = "CG",
-    control = list(fnscale=-1),
-    fn = J
-  )$par
-  
-  print(c(theta[1], exp(-theta[2])))
+theta = optim(
+  par = c(0,-138),
+  gr = "CG",
+  control = list(fnscale=-1),
+  fn = J
+)$par
 
-```
+print(c(theta[1], exp(-theta[2])))
 
-```{r eval=FALSE}
-# Constante calculée par le package GiRaf
+# ------- CONSTANTE CALCULEE PAR LE PACKAGE GIRAF ------------------------------
 NC.mrf(height, width, beta)
 ```
-
