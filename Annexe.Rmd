@@ -49,6 +49,7 @@ pal4 = c("#3B9AB2", "#78B7C5", "#EBCC2A", "#DC863B")
 pal3 = c("#3B9AB2", "#EBCC2A", "#DC863B")
 pal2 = c("#3B9AB2", "#DC863B")
 pal2_bis = c("#3B9AB2", "#EBCC2A")
+pal1 = "#3B9AB2"
 ```
 
 \newpage
@@ -535,17 +536,17 @@ for (m in M3){
   for (r in RATIO) {
     for (i in 1:1000) {
     
-       df_rev_log_reg[nrow(df_rev_log_reg) + 1, ] = c(df_rev_log_reg(x, rcauchy, r*m, alpha, alpha, pm_barre, pn_cauchy), m, r, "cauchy")
+       df_rev_log_reg[nrow(df_rev_log_reg) + 1, ] = c(rev_log_reg(x, rcauchy, r*m, alpha, alpha, pm_barre, pn_cauchy), m, r, "cauchy")
        
     }
     for (i in 1:1000) {
     
-       df_rev_log_reg[nrow(df_rev_log_reg) + 1, ] = c(df_rev_log_reg(x, rnorm, r*m, alpha, alpha, pm_barre, pn_norm), m, r, "normale")
+       df_rev_log_reg[nrow(df_rev_log_reg) + 1, ] = c(rev_log_reg(x, rnorm, r*m, alpha, alpha, pm_barre, pn_norm), m, r, "normale")
        
     }
     for (i in 1:1000) {
     
-       df_rev_log_reg[nrow(df_rev_log_reg) + 1, ] = c(df_rev_log_reg(x, runif, r*m, alpha, psi2, pm_barre, pn_unif), m, r, "unif")
+       df_rev_log_reg[nrow(df_rev_log_reg) + 1, ] = c(rev_log_reg(x, runif, r*m, alpha, psi2, pm_barre, pn_unif), m, r, "unif")
        
     }
   }
@@ -725,7 +726,7 @@ RLI_bootstrap = function(x, generate_y, n, alpha, psi, pm_barre, pn_barre, size_
   theta_bootstrap = c()
   x_bootstrap = x
   for (i in 1:size_boot) {
-    theta_bootstrap = append(theta_bootstrap, rev_log_reg_with_noise(x_bootstrap, 
+    theta_bootstrap = append(theta_bootstrap, rev_log_reg(x_bootstrap, 
                                                   generate_y,
                                                   n, 
                                                   alpha,
@@ -935,8 +936,9 @@ ggplot(df_recurs_melted, aes(x = iteration, y = value)) +
   scale_color_manual(values = pal2, labels = lab) + 
   labs(col="Paramètres : ") + 
   ylab("Valeurs des paramètres") + 
-  xlab("Itérations") + geom_hline(yintercept = 2, linetype="dotted") + 
-  geom_hline(yintercept = 4, linetype="dotted")  + 
+  xlab("Itérations") + 
+  geom_hline(yintercept = 2, linetype="dotted") + 
+  geom_hline(yintercept = 4, linetype="dotted") + 
   theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) +
   ggtitle("Récursivité : approche avec loi de mélange")
 
@@ -1014,16 +1016,24 @@ get_neighbors = function(config, row_site, col_site){
 #------------- ENERGIE ---------------------------------------------------------
 
 # But : calculer l'énergie d'une configuration "config"
+# model : argument optionnel utile dans nos tests en dernière section du mémoire
 
 # Sortie : un entier
 
-compute_energy = function(config){
+compute_energy = function(config, model = "ising"){
   height = dim(config)[1]
   width = dim(config)[2]
   energy = 0
   for (i in 1:height){
     for (j in 1:width){
-      energy = energy - config[i,j]*sum(get_neighbors(config, i, j))
+      if (model == "ising") {
+        energy = energy - config[i,j]*sum(get_neighbors(config, i, j))
+      } 
+      else { 
+        # adaptation de l'énergie au modèle de Potts
+        # explications de ce besoin dans la dernière section
+        energy = energy - sum(config[i,j]==get_neighbors(config, i, j))
+      }
     }
   }
   # on divise par deux pour ne pas compter en double les voisins
@@ -1166,10 +1176,12 @@ graph_config(iter100000)
 # Entrées :
 #   beta : paramètre du modèle
 #   samples : échantillon de plusieurs configurations empilées verticalement dans une matrice
+# model : argument optionnel utile dans nos tests en dernière section du mémoire
+
 
 # Sortie : densité non normalisée du modèle d'Ising 
 
-pm_barre_ising = function(samples, beta){
+pm_barre_ising = function(samples, beta, model = "ising"){
   # vecteur qui contiendra l'énergie de chaque configuration
   energy_of_each_config = c()
   # nombre de configurations présentes dans le "samples" en entrée
@@ -1179,7 +1191,7 @@ pm_barre_ising = function(samples, beta){
     id_beginning_config = 1+i*height
     id_end_config = id_beginning_config + height - 1
     # on calcule l'énergie de la configuration sélectionnée
-    energy_of_each_config = append(energy_of_each_config, compute_energy(samples[id_beginning_config:id_end_config,]))
+    energy_of_each_config = append(energy_of_each_config, compute_energy(samples[id_beginning_config:id_end_config,], model))
   }
   return(exp(-beta * energy_of_each_config))
 }
@@ -1187,10 +1199,11 @@ pm_barre_ising = function(samples, beta){
 # Entrées :
 #   theta : paramètres du modèle
 #   samples : échantillon de plusieurs configurations empilées verticalement dans une matrice
+# model : argument optionnel utile dans nos tests en dernière section du mémoire
 
 # Sortie : logarithme de la densité du modèle d'Ising 
 
-log_pm_ising = function(samples, theta){
+log_pm_ising = function(samples, theta, model = "ising"){
   # theta[1] = beta
   # theta[2] = -log(Z)
   m = dim(samples)[1] / height
@@ -1198,7 +1211,7 @@ log_pm_ising = function(samples, theta){
   for (i in 0:(m-1)){
     id_beginning_config = 1+i*height
     id_end_config = id_beginning_config + height - 1
-    energy_of_each_config = append(energy_of_each_config, compute_energy(samples[id_beginning_config:id_end_config,]))
+    energy_of_each_config = append(energy_of_each_config, compute_energy(samples[id_beginning_config:id_end_config,], model))
   }
   return(-theta[1] * energy_of_each_config + theta[2])
 }
@@ -1221,14 +1234,16 @@ pn_discr_unif_2D = function(samples, param){
   return(rowProds(ifelse(samples == -1, 1/2, ifelse(samples == 1, 1/2, 0))))
 }
 
-log_pn_discr_unif_2D = function(samples){
-  return(log(pn_discr_unif_2D(samples, c(height, width))))
+log_pn_discr_unif_2D = function(samples, param){
+  # param[1] = height
+  # param[2] = width
+  return(log(pn_discr_unif_2D(samples, c(param[1], param[2]))))
 }
 
 #------------- CHOIX DES PARAMETRES ET DIMENSIONS ------------------------------
 
-beta = 0
-psi = 0
+beta = 0.5
+psi = 0.8
 width = 20
 height = 10
 burn_in = 100000
@@ -1236,7 +1251,7 @@ epsilon = 100
 m = 100
 n = 100
 x = samples_ising_2D(beta, height, width, burn_in, epsilon, m)
-y = samples_ising_2D(psi, height, width, burn_in, epsilon, n)
+y_mcmle = samples_ising_2D(psi, height, width, burn_in, epsilon, n)
 ```
 
 
@@ -1245,73 +1260,182 @@ Les fonctions __mc_mle__, __rev_log_reg__ et __nce__ présentées au début de l
 ```{r}
 #------- MC MLE ----------------------------------------------------------------
 
-# Fonction objectif
-L = function(beta){ return(sum(log(pm_barre_ising(x,beta)/pm_barre_ising(x,psi))) - m*log(mean(pm_barre_ising(y,beta)/pm_barre_ising(y,psi))))}
+mc_mle_ising = function(psi, 
+                        n_ = n,
+                        height_ = height, 
+                        width_ = width,
+                        burn_in_ = burn_in,
+                        epsilon_ = epsilon,
+                        m_ = m,
+                        x_ = x){
+  
+  y = samples_ising_2D(psi, height_, width_, burn_in_, epsilon_, n_)
 
-print(optimize(L, c(0,1), maximum = TRUE)$maximum)
+  # Fonction objectif
+  L = function(beta){ return(sum(log(pm_barre_ising(x_,beta)/pm_barre_ising(x_,psi))) - m*log(mean(pm_barre_ising(y,beta)/pm_barre_ising(y,psi))))}
+  
+  return(optimize(L, c(0,1), maximum = TRUE)$maximum)
+}
+
+(mc_mle_ising(psi))
+```
+Après plusieurs tentatives en faisant varier la valeur de $\psi$ sans toucher à celle de $\beta$ on remarque que le paramètre estimé semble être $\psi$ au lieu de $\beta$.
+
+```{r eval = FALSE}
+'
+#------- ESSAI DE DIFFERENTTES VALEURS POUR PSI --------------------------------
+
+PSI = seq(from = 0, to = 1, by = 0.1)
+estimations_beta = c()
+
+for (p in PSI){
+  estimations_beta = append(estimations_beta, mc_mle_ising(p))
+}
+
+df_ising_mc_mle = data.frame(PSI = PSI, estimations_beta = estimations_beta)
+
+write.csv(df_ising_mc_mle, "dataframes/df_ising_mc_mle.csv", row.names = FALSE)
+
+'
 ```
 
+```{r message = FALSE}
+
+#------- GRAPHIQUE MC MLE ISING ------------------------------------------------
+
+df_ising_mc_mle <- read_csv("dataframes/df_ising_mc_mle.csv")
+
+ggplot(df_ising_mc_mle, aes(x = PSI, y = estimations_beta)) + 
+  geom_line(color = pal1) + 
+  geom_point(color = pal1, size = 2) +
+  ylab("Estimations de beta") + 
+  xlab("Valeurs de psi") +
+  geom_hline(yintercept = beta, linetype="dotted")  + 
+  theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) +
+  ggtitle("MC MLE appliqué au modèle d'Ising")
+```
+
+Afin de chercher d'où provient l'erreur, on trace la fonction objectif pour la valeur $\psi = 0.8$.
 
 ```{r}
-#------ Régression logistique inverse ------------------------------------------
 
-# calcul des probabilités p_j
-denom = function(sample, eta) {
-  return(pm_barre_ising(sample, beta)*exp(eta[1]) + pn_discr_unif_2D(sample,c(height, width))*exp(eta[2]))}
-p_X = function(sample, eta){
-  return (pm_barre_ising(sample, beta)*exp(eta[1]) / denom(sample, eta))}
-p_Y = function(sample, eta){
-  return (pn_discr_unif_2D(sample, c(height, width))*exp(eta[2]) / denom(sample, eta))}
+#------- GRAPHIQUE FONCTION OBJECTIF MC MLE ISING ------------------------------
 
-# fonction objectif
-L = function(eta) {
-  return(sum(log(p_X(x, eta))) + sum(log(p_Y(y, eta))))}
+abscisse = seq(from = 0, to = 1, by = 0.1)
+ordonnee = c()
 
-# initialisation descente de gradient
-eta1 = log(m/(m+n))
-eta2 = log(n/(m+n))
+L = function(beta){ return(sum(log(pm_barre_ising(x,beta)/pm_barre_ising(x,psi))) - m*log(mean(pm_barre_ising(y_mcmle,beta)/pm_barre_ising(y_mcmle,psi))))}
 
-# optimisation
-const = optim(
-  par = c(eta1,eta2),
-  gr = "CG",
-  control = list(fnscale=-1),
-  fn = L
-)$par
+for (a in abscisse){
+  ordonnee = append(ordonnee, L(a))
+}
 
-# calcul de la constante
-constante_additive = const[2] + log(1) - log(n/(m+n))
+plt = data.frame(x = abscisse, y = ordonnee)
 
-# affichage de la constante de normalisation
-print(exp(-const[1] + log(m/(m+n)) + constante_additive))
+ggplot(plt, aes(x = x, y = y)) + 
+  geom_line(color = pal1) + 
+  geom_point(color = pal1, size = 2) +
+  ylab("Valeur de la fonction objectif") + 
+  geom_vline(xintercept = psi, linetype="dotted")  + 
+  theme(legend.position="bottom", legend.box="vertical", legend.margin=margin()) +
+  ggtitle("Fonction objectif de la méthode MC MLE pour psi = 0.8")
 ```
 
+Nous passons à l'estimation de la constante de normalisation avec les méthode de régression logistique inverse et NCE.
+
+```{r}
+#------ REGRESSION LOGISTIQUE INVERSE ------------------------------------------
+
+rli_ising = function (x_ = x, 
+                      beta_ = beta, 
+                      height_ = height, 
+                      width_ = width,
+                      m_ = m,
+                      n_ = n,
+                      model = "ising") {
+  
+  # echantillon de bruit
+  y = samples_unif_2D(n_, height_, width_)
+  
+  # calcul des probabilités p_j
+  denom = function(sample, eta) {
+    return(pm_barre_ising(sample, beta_, model)*exp(eta[1]) + pn_discr_unif_2D(sample,c(height_, width_))*exp(eta[2]))}
+  p_X = function(sample, eta){
+    return (pm_barre_ising(sample, beta_, model)*exp(eta[1]) / denom(sample, eta))}
+  p_Y = function(sample, eta){
+    return (pn_discr_unif_2D(sample, c(height_, width_))*exp(eta[2]) / denom(sample, eta))}
+  
+  # fonction objectif
+  L = function(eta) {
+    return(sum(log(p_X(x_, eta))) + sum(log(p_Y(y, eta))))}
+  
+  # initialisation descente de gradient
+  eta1_init = log(m_/(m_+n_))
+  eta2_init = log(n_/(m_+n_))
+  
+  # optimisation
+  const = optim(
+    par = c(eta1_init,eta2_init),
+    gr = "CG",
+    control = list(fnscale=-1),
+    fn = L
+  )$par
+  
+  # calcul de la constante
+  constante_additive = const[2] + log(1) - log(n_/(m_+n_))
+  
+  # affichage de la constante de normalisation
+  return(exp(-const[1] + log(m_/(m_+n_)) + constante_additive))
+}
+
+#------ Application avec les paramètres par défaut -----------------------------
+
+(rli_ising())
+
+```
 
 ```{r}
 # ------- NCE ------------------------------------------------------------------
 
-h = function(u, theta){
-    return( 1 / (1 + n/m * exp(log_pn_discr_unif_2D(u) - log_pm_ising(u, theta))))
+nce_ising = function(x_ = x,
+                     height_ = height,
+                     width_ = width,
+                     n_ = n,
+                     m_ = m) {
+  
+  # echantillon de bruit
+  y = samples_unif_2D(n_, height_, width_)
+  
+  # fonction objectif
+  h = function(u, theta){
+      return( 1 / (1 + n_/m_ * exp(log_pn_discr_unif_2D(u, c(height_, width_)) - log_pm_ising(u, theta))))
+    }
+    
+  J = function(theta){
+    return( sum(log(h(x_, theta))) + sum(log(1 - h(y, theta))) )
   }
   
-J = function(theta){
-  return( sum(log(h(x, theta))) + sum(log(1 - h(y, theta))) )
+  # estimation du paramètre et de la constante
+  theta = optim(
+    par = c(0,-138),
+    gr = "CG",
+    control = list(fnscale=-1),
+    fn = J
+  )$par
+  
+  return(c(theta[1], exp(-theta[2])))
 }
 
-theta = optim(
-  par = c(0,-138),
-  gr = "CG",
-  control = list(fnscale=-1),
-  fn = J
-)$par
-
-print(c(theta[1], exp(-theta[2])))
+(nce_ising())
 ```
-
+Afin de vérifier nos résultats, nous pouvons utiliser le package GiRaf. Celui-ci est cependant conçu pour le modèle de Potts, dans lequel l'énergie n'est pas définie comme dans le modèle d'Ising. Afin de comparer des quantités comparables, nous avons modifié la fonction compute_energy afin d'y ajouter un argument optionnel qui l'adapte au modèle de Potts 
 
 ```{r}
 # ------- CONSTANTE CALCULEE PAR LE PACKAGE GIRAF ------------------------------
 NC.mrf(height, width, beta)
+
+# ------- CONSTANTE ESTIMEE PAR REGRESSION LOGISTIQUE INVERSE ------------------
+(rli_ising(model = "Potts"))
 ```
 
 
