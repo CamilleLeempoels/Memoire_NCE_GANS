@@ -312,6 +312,8 @@ log\_pm & fonction &  & fonction qui retourne le logarithme de la densité $p_m$
 log\_pn & fonction &  & fonction qui retourne le logarithme de la densité $p_n$ \\ \hline
 size\_theta & entier & 3 & taille de $\theta := (\alpha,c)$, vaut généralement 2 ou 3 \\ \hline
 n & entier & 100 & taille de l'échantillon de bruit suivant la loi $p_n$ \\ \hline
+\textbf{Sortie} & \textbf{Type} & \textbf{Exemple} & \textbf{Indication} \\ \hline
+$\widehat{\theta^*} := (\widehat{\alpha^*},\widehat{Z(\alpha^*)})$ & vecteur &  & estimation du paramètre et de la constante\\ \hline
 \end{tabular}
 \end{table}
 
@@ -1011,11 +1013,13 @@ get_neighbors = function(config, row_site, col_site){
 
 #------------- ENERGIE ---------------------------------------------------------
 
-# But : calculer l'énergie d'une configuration "config" de taille "height" et de largeur "width".
+# But : calculer l'énergie d'une configuration "config"
 
 # Sortie : un entier
 
-compute_energy = function(config, height, width){
+compute_energy = function(config){
+  height = dim(config)[1]
+  width = dim(config)[2]
   energy = 0
   for (i in 1:height){
     for (j in 1:width){
@@ -1047,14 +1051,16 @@ On a $p = \frac{1}{1 + exp(\beta \Delta H)}$ avec $\Delta H = 2\sigma_{i,j}\sum_
 
 #------------- SIMULATION D'UNE CONFIGURATION ----------------------------------
 
-# But : simuler une configuration de hauteur "height" et largeur "width" du modèle d'ising de param "beta"
-# "iter" est le nombre d'iterations effectuées pour supposément atteindre la stationnarité
-# "init" est une configuration initale de taille "height" x "width"
+# But : simuler une configuration du modèle d'ising de paramètre "beta"
+#   "iter" est le nombre d'iterations effectuées pour supposément atteindre la stationnarité
+#   "init" est une matrice qui représente la configuration initale
 
 # Sortie : une matrice de taille "height" x "width"
 
-sim_ising_2D = function(beta, height, width, iter, init) {
+sim_ising_2D = function(beta, iter, init) {
   config = init
+  height = dim(config)[1]
+  width = dim(config)[2]
   for (i in 1:iter) {
     row = sample(1:height, 1)
     col = sample(1:width, 1)
@@ -1072,11 +1078,11 @@ Maintenant que l'on sait simuler une configuration issue du modèle d'Ising, on 
 #------------- SIMULATION D'UN ECHANTILLON DE CONFIGURATIONS -------------------
 
 # Entrées :
-# beta : paramètre du modèle
-# height, width : taille d'une configuration
-# burn_in : nombre d'itérations pour atteindre la stationnarité
-# epsilon : pas de décorrélation pour sélectionner des configs iid
-# m : nombre de configurations dans notre échantillon
+#   beta : paramètre du modèle
+#   height, width : taille d'une configuration
+#   burn_in : nombre d'itérations pour atteindre la stationnarité
+#   epsilon : pas de décorrélation pour sélectionner des configs iid
+#   m : nombre de configurations dans notre échantillon
 
 # Sortie : matrice de hauteur m * height et de largeur width
 # autrement dit les configurations sont "empilées" verticalement dans une grande matrice
@@ -1087,12 +1093,13 @@ samples_ising_2D = function(beta, height, width, burn_in, epsilon, m){
   current_config = sim_unif_2D(height, width)
   
   # On effectue des itérations jusqu'à atteindre supposément l'état stationnaire
-  current_config = sim_ising_2D(beta, height, width, burn_in, current_config)
+  current_config = sim_ising_2D(beta, burn_in, current_config)
   samples = current_config
   
-  # Une fois la stationnarité atteinte, on prend un échantillon tous les epsilon pas afin que nos échantillons soient iid
+  # Une fois la stationnarité atteinte, on prend une configuration tous les epsilon pas 
+  # afin que les configurations soient iid
   for (i in 2:m){
-    current_config = sim_ising_2D(beta, height, width, epsilon, current_config)
+    current_config = sim_ising_2D(beta, epsilon, current_config)
     samples = rbind(samples, current_config)
   }
   
@@ -1137,16 +1144,16 @@ width = 20
 iter0 = matrix(rep(-1, height*width), ncol = width)
 graph_config(iter0)
 
-iter100 = sim_ising_2D(beta, height, width, 100, iter0)
+iter100 = sim_ising_2D(beta, 100, iter0)
 graph_config(iter100)
 
-iter1000 = sim_ising_2D(beta, height, width, 900, iter100)
+iter1000 = sim_ising_2D(beta, 900, iter100)
 graph_config(iter1000)
 
-iter10000 = sim_ising_2D(beta, height, width, 9000, iter1000)
+iter10000 = sim_ising_2D(beta, 9000, iter1000)
 graph_config(iter10000)
 
-iter100000 = sim_ising_2D(beta, height, width, 190000, iter10000)
+iter100000 = sim_ising_2D(beta, 190000, iter10000)
 graph_config(iter100000)
 ```
 
@@ -1157,8 +1164,8 @@ graph_config(iter100000)
 #------------- DENSITES NORMALISEES ET NON NORMALISEES NECESSAIRES DANS LES METHODES 
 
 # Entrées :
-# beta : paramètre du modèle
-# samples : échantillon de plusieurs configurations empilées verticalement dans une matrice
+#   beta : paramètre du modèle
+#   samples : échantillon de plusieurs configurations empilées verticalement dans une matrice
 
 # Sortie : densité non normalisée du modèle d'Ising 
 
@@ -1172,14 +1179,14 @@ pm_barre_ising = function(samples, beta){
     id_beginning_config = 1+i*height
     id_end_config = id_beginning_config + height - 1
     # on calcule l'énergie de la configuration sélectionnée
-    energy_of_each_config = append(energy_of_each_config, compute_energy(samples[id_beginning_config:id_end_config,], height, width))
+    energy_of_each_config = append(energy_of_each_config, compute_energy(samples[id_beginning_config:id_end_config,]))
   }
   return(exp(-beta * energy_of_each_config))
 }
 
 # Entrées :
-# theta : paramètres du modèle
-# samples : échantillon de plusieurs configurations empilées verticalement dans une matrice
+#   theta : paramètres du modèle
+#   samples : échantillon de plusieurs configurations empilées verticalement dans une matrice
 
 # Sortie : logarithme de la densité du modèle d'Ising 
 
@@ -1191,15 +1198,26 @@ log_pm_ising = function(samples, theta){
   for (i in 0:(m-1)){
     id_beginning_config = 1+i*height
     id_end_config = id_beginning_config + height - 1
-    energy_of_each_config = append(energy_of_each_config, compute_energy(samples[id_beginning_config:id_end_config,], height, width))
+    energy_of_each_config = append(energy_of_each_config, compute_energy(samples[id_beginning_config:id_end_config,]))
   }
   return(-theta[1] * energy_of_each_config + theta[2])
 }
 
+# Entrée : 
+#   samples : échantillon de plusieurs configurations empilées verticalement dans une matrice
+#   param : dimensions d'une configuration
+
+# Sortie : densité d'une matrice remplie par une loi uniforme discrète U({-1,1})
+
 pn_discr_unif_2D = function(samples, param){
   # param[1] = height
   # param[2] = width
+  
+  # on transforme chaque matrice empilée verticalement dans "samples" en un vecteur
+  # ces vecteurs sont empilés verticalement dans une nouvelle matrice "samples"
   samples = matrix(t(samples), ncol = param[1] * param[2], byrow = TRUE)
+  
+  # on calcule la densité de chaque "matrice uniforme"
   return(rowProds(ifelse(samples == -1, 1/2, ifelse(samples == 1, 1/2, 0))))
 }
 
@@ -1215,8 +1233,8 @@ width = 20
 height = 10
 burn_in = 100000
 epsilon = 100
-m = 1000
-n = 10000
+m = 100
+n = 100
 x = samples_ising_2D(beta, height, width, burn_in, epsilon, m)
 y = samples_ising_2D(psi, height, width, burn_in, epsilon, n)
 ```
@@ -1228,27 +1246,30 @@ Les fonctions __mc_mle__, __rev_log_reg__ et __nce__ présentées au début de l
 #------- MC MLE ----------------------------------------------------------------
 
 # Fonction objectif
-L = function(alpha){ return(sum(log(pm_barre_ising(x,alpha)/pm_barre_ising(x,psi))) - m*log(mean(pm_barre_ising(y,alpha)/pm_barre_ising(y,psi))))}
+L = function(beta){ return(sum(log(pm_barre_ising(x,beta)/pm_barre_ising(x,psi))) - m*log(mean(pm_barre_ising(y,beta)/pm_barre_ising(y,psi))))}
 
 print(optimize(L, c(0,1), maximum = TRUE)$maximum)
+```
 
+
+```{r}
 #------ Régression logistique inverse ------------------------------------------
 
 # calcul des probabilités p_j
 denom = function(sample, eta) {
   return(pm_barre_ising(sample, beta)*exp(eta[1]) + pn_discr_unif_2D(sample,c(height, width))*exp(eta[2]))}
-p_1 = function(sample, eta){
+p_X = function(sample, eta){
   return (pm_barre_ising(sample, beta)*exp(eta[1]) / denom(sample, eta))}
-p_2 = function(sample, eta){
+p_Y = function(sample, eta){
   return (pn_discr_unif_2D(sample, c(height, width))*exp(eta[2]) / denom(sample, eta))}
 
 # fonction objectif
 L = function(eta) {
-  return(sum(log(p_1(x, eta))) + sum(log(p_2(y, eta))))}
+  return(sum(log(p_X(x, eta))) + sum(log(p_Y(y, eta))))}
 
 # initialisation descente de gradient
-eta1 = -log(sd(x)*sqrt(2*pi)) + log(m/(m+n))
-eta2 = -log(sd(y)*sqrt(2*pi)) + log(n/(m+n))
+eta1 = log(m/(m+n))
+eta2 = log(n/(m+n))
 
 # optimisation
 const = optim(
@@ -1261,8 +1282,12 @@ const = optim(
 # calcul de la constante
 constante_additive = const[2] + log(1) - log(n/(m+n))
 
+# affichage de la constante de normalisation
 print(exp(-const[1] + log(m/(m+n)) + constante_additive))
+```
 
+
+```{r}
 # ------- NCE ------------------------------------------------------------------
 
 h = function(u, theta){
@@ -1281,7 +1306,12 @@ theta = optim(
 )$par
 
 print(c(theta[1], exp(-theta[2])))
+```
 
+
+```{r}
 # ------- CONSTANTE CALCULEE PAR LE PACKAGE GIRAF ------------------------------
 NC.mrf(height, width, beta)
 ```
+
+
