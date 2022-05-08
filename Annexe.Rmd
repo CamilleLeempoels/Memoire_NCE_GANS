@@ -1176,7 +1176,7 @@ graph_config(iter100000)
 # Entrées :
 #   beta : paramètre du modèle
 #   samples : échantillon de plusieurs configurations empilées verticalement dans une matrice
-# model : argument optionnel utile dans nos tests en dernière section du mémoire
+#   model : argument optionnel utile dans nos tests en dernière section du mémoire
 
 
 # Sortie : densité non normalisée du modèle d'Ising 
@@ -1199,7 +1199,7 @@ pm_barre_ising = function(samples, beta, model = "ising"){
 # Entrées :
 #   theta : paramètres du modèle
 #   samples : échantillon de plusieurs configurations empilées verticalement dans une matrice
-# model : argument optionnel utile dans nos tests en dernière section du mémoire
+#   model : argument optionnel utile dans nos tests en dernière section du mémoire
 
 # Sortie : logarithme de la densité du modèle d'Ising 
 
